@@ -1,0 +1,72 @@
+name: roster_up
+description: "RosterUp - Coordinate pickup games with your team. Simple confirmations, no complexity."
+publish_to: 'none'
+
+version: 1.0.0+3
+
+environment:
+  sdk: '>=3.1.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # Firebase
+  firebase_core: ^4.2.1
+  cloud_firestore: ^6.1.0
+  firebase_auth: ^6.1.2
+  firebase_messaging: ^16.0.4
+  firebase_analytics: ^12.0.4
+  firebase_crashlytics: ^5.0.5
+  
+  # State Management & Navigation
+  provider: ^6.1.1
+  go_router: ^17.0.1
+  
+  # UI & Design
+  cupertino_icons: ^1.0.2
+  google_fonts: ^6.1.0
+  
+  # Utilities
+  shared_preferences: ^2.2.2
+  intl: ^0.20.2
+  url_launcher: ^6.2.2
+
+  # Ads
+  google_mobile_ads: ^6.0.0
+  
+  # Location & Maps
+  geolocator: ^14.0.2
+  geocoding: ^4.0.0
+  google_maps_flutter: ^2.5.0
+  
+  # Push Notifications
+  # flutter_local_notifications: ^16.3.3  # Disabled due to Android plugin compile error
+  # UUID for team codes
+  uuid: ^4.2.1
+  # HTTP requests
+  http: ^1.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.1
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/
+  
+  # Using Google Fonts instead of local assets
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icons/app_icon.png"
+  remove_alpha_ios: true
+  # Optional: For adaptive icons on Android
+  adaptive_icon_background: "#FFFFFF"  # Change to your brand color
+  adaptive_icon_foreground: "assets/icons/app_icon.png"
