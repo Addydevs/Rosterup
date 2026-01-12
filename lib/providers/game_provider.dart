@@ -39,6 +39,18 @@ class GameProvider extends ChangeNotifier {
       _error = null;
       notifyListeners();
 
+      String? finalAccessCode = accessCode;
+      if (!isPublic) {
+        // Auto-generate an uppercase access code if one was not provided.
+        if (finalAccessCode == null || finalAccessCode.trim().isEmpty) {
+          finalAccessCode = await _generateUniqueAccessCode(teamId);
+        } else {
+          finalAccessCode = finalAccessCode.toUpperCase();
+        }
+      } else {
+        finalAccessCode = null;
+      }
+
       final game = Game(
         id: _uuid.v4(),
         teamId: teamId,
@@ -50,7 +62,7 @@ class GameProvider extends ChangeNotifier {
         maxPlayersIn: maxPlayersIn,
         isRecurring: isRecurring,
         isPublic: isPublic,
-        accessCode: accessCode,
+        accessCode: finalAccessCode,
         confirmations: {},
         notes: notes,
         createdAt: DateTime.now(),
@@ -62,13 +74,17 @@ class GameProvider extends ChangeNotifier {
       _games.add(game);
       _games.sort((a, b) => a.dateTime.compareTo(b.dateTime));
 
-      // Analytics: game created
-      await AnalyticsService.logCreateGame(
-        gameId: game.id,
-        teamId: teamId,
-        isPublic: isPublic,
-        isRecurring: isRecurring,
-      );
+      // Analytics: game created (do not fail creation if analytics throws)
+      try {
+        await AnalyticsService.logCreateGame(
+          gameId: game.id,
+          teamId: teamId,
+          isPublic: isPublic,
+          isRecurring: isRecurring,
+        );
+      } catch (_) {
+        // Ignore analytics errors so the user flow stays smooth.
+      }
 
       // Schedule local reminders for this device: 24h and 1h before.
       try {
@@ -105,6 +121,33 @@ class GameProvider extends ChangeNotifier {
     }
   }
 
+  Future<String> _generateUniqueAccessCode(String teamId) async {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    String code;
+    bool exists = true;
+
+    while (exists) {
+      final buffer = StringBuffer();
+      for (var i = 0; i < 6; i++) {
+        final millis = DateTime.now().millisecondsSinceEpoch + i;
+        buffer.write(chars[millis % chars.length]);
+      }
+      code = buffer.toString();
+
+      final snapshot = await _firestore
+          .collection('games')
+          .where('teamId', isEqualTo: teamId)
+          .where('accessCode', isEqualTo: code)
+          .limit(1)
+          .get();
+
+      exists = snapshot.docs.isNotEmpty;
+      if (!exists) return code;
+    }
+
+    return 'GAME$teamId'.substring(0, 6); // Fallback, very unlikely.
+  }
+
   Future<void> confirmAttendance({
     required String gameId,
     required String userId,
@@ -115,10 +158,16 @@ class GameProvider extends ChangeNotifier {
       notifyListeners();
 
       // Update Firestore
-      await _firestore.collection('games').doc(gameId).update({
+      final updates = <String, Object?>{
         'confirmations.$userId': status.name,
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      };
+      // Clear any previous decline reason when status is not declined.
+      if (status != ConfirmationStatus.declined) {
+        updates['declineReasons.$userId'] = FieldValue.delete();
+      }
+
+      await _firestore.collection('games').doc(gameId).update(updates);
 
       // Update local state
       final gameIndex = _games.indexWhere((g) => g.id == gameId);
@@ -127,9 +176,16 @@ class GameProvider extends ChangeNotifier {
           _games[gameIndex].confirmations,
         );
         updatedConfirmations[userId] = status;
-        
+
+        final updatedDeclineReasons =
+            Map<String, String>.from(_games[gameIndex].declineReasons);
+        if (status != ConfirmationStatus.declined) {
+          updatedDeclineReasons.remove(userId);
+        }
+
         _games[gameIndex] = _games[gameIndex].copyWith(
           confirmations: updatedConfirmations,
+          declineReasons: updatedDeclineReasons,
         );
       }
 
@@ -140,6 +196,95 @@ class GameProvider extends ChangeNotifier {
           gameId: gameId,
           teamId: game.teamId,
           status: status.name,
+        );
+      }
+    } catch (e) {
+      _error = e.toString();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> setGuestCount({
+    required String gameId,
+    required String userId,
+    required int guestCount,
+  }) async {
+    try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+
+      final updates = <String, Object?>{
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (guestCount <= 0) {
+        updates['guestCounts.$userId'] = FieldValue.delete();
+      } else {
+        updates['guestCounts.$userId'] = guestCount;
+      }
+
+      await _firestore.collection('games').doc(gameId).update(updates);
+
+      final gameIndex = _games.indexWhere((g) => g.id == gameId);
+      if (gameIndex != -1) {
+        final updatedGuestCounts =
+            Map<String, int>.from(_games[gameIndex].guestCounts);
+
+        if (guestCount <= 0) {
+          updatedGuestCounts.remove(userId);
+        } else {
+          updatedGuestCounts[userId] = guestCount;
+        }
+
+        final updatedGame = _games[gameIndex].copyWith(
+          guestCounts: updatedGuestCounts,
+        );
+        _games[gameIndex] = updatedGame;
+
+        try {
+          await AnalyticsService.logGamePlusOneToggled(
+            gameId: updatedGame.id,
+            teamId: updatedGame.teamId,
+            hasGuest: guestCount > 0,
+          );
+        } catch (_) {
+          // Ignore analytics failures so UX stays smooth.
+        }
+      }
+    } catch (e) {
+      _error = e.toString();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> setDeclineReason({
+    required String gameId,
+    required String userId,
+    required String reasonCode,
+  }) async {
+    try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+
+      await _firestore.collection('games').doc(gameId).update({
+        'declineReasons.$userId': reasonCode,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      final gameIndex = _games.indexWhere((g) => g.id == gameId);
+      if (gameIndex != -1) {
+        final updatedDeclineReasons =
+            Map<String, String>.from(_games[gameIndex].declineReasons);
+        updatedDeclineReasons[userId] = reasonCode;
+
+        _games[gameIndex] = _games[gameIndex].copyWith(
+          declineReasons: updatedDeclineReasons,
         );
       }
     } catch (e) {
@@ -337,6 +482,66 @@ class GameProvider extends ChangeNotifier {
     } catch (e) {
       _error = e.toString();
       return [];
+    }
+  }
+
+  Future<bool> deleteGame(String gameId) async {
+    try {
+      await _firestore.collection('games').doc(gameId).update({
+        'isActive': false,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      final index = _games.indexWhere((g) => g.id == gameId);
+      if (index != -1) {
+        _games[index] = _games[index].copyWith(isActive: false);
+        notifyListeners();
+      }
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> updateGameDetails({
+    required String gameId,
+    DateTime? dateTime,
+    String? location,
+    int? maxPlayersIn,
+  }) async {
+    try {
+      final updates = <String, Object?>{
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      if (dateTime != null) {
+        updates['dateTime'] = Timestamp.fromDate(dateTime);
+      }
+      if (location != null) {
+        updates['location'] = location;
+      }
+      if (maxPlayersIn != null) {
+        updates['maxPlayersIn'] = maxPlayersIn;
+      }
+
+      await _firestore.collection('games').doc(gameId).update(updates);
+
+      final index = _games.indexWhere((g) => g.id == gameId);
+      if (index != -1) {
+        _games[index] = _games[index].copyWith(
+          dateTime: dateTime,
+          location: location,
+          maxPlayersIn: maxPlayersIn,
+        );
+        _games.sort((a, b) => a.dateTime.compareTo(b.dateTime));
+        notifyListeners();
+      }
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
     }
   }
 }

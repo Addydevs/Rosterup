@@ -13,8 +13,22 @@ import 'discover_games_screen.dart';
 import 'game_detail_screen.dart';
 import 'game_history_screen.dart';
 
-class GamesScreen extends StatelessWidget {
+enum GamesFilter {
+  all,
+  needingResponse,
+  imIn,
+}
+
+class GamesScreen extends StatefulWidget {
   const GamesScreen({super.key});
+
+  @override
+  State<GamesScreen> createState() => _GamesScreenState();
+}
+
+class _GamesScreenState extends State<GamesScreen> {
+  String _searchQuery = '';
+  GamesFilter _filter = GamesFilter.all;
 
   @override
   Widget build(BuildContext context) {
@@ -34,6 +48,7 @@ class GamesScreen extends StatelessWidget {
 
     final auth = context.watch<AuthProvider>();
     final currentUserId = auth.user?.uid;
+    final onSurfaceColor = Theme.of(context).colorScheme.onSurface;
 
     Game? nextGameNeedingStatus;
     if (currentUserId != null) {
@@ -46,6 +61,35 @@ class GamesScreen extends StatelessWidget {
       }
     }
 
+    // Apply filters and search to games list.
+    var filteredGames = [...games];
+    if (currentUserId != null) {
+      filteredGames = filteredGames.where((game) {
+        final status = game.confirmations[currentUserId];
+        switch (_filter) {
+          case GamesFilter.all:
+            return true;
+          case GamesFilter.needingResponse:
+            return status == null ||
+                status == ConfirmationStatus.noResponse;
+          case GamesFilter.imIn:
+            return status == ConfirmationStatus.confirmed;
+        }
+      }).toList();
+    }
+    if (_searchQuery.isNotEmpty) {
+      filteredGames = filteredGames.where((game) {
+        final matchingTeams = teamProvider.teams
+            .where((t) => t.id == game.teamId)
+            .toList();
+        final teamName =
+            matchingTeams.isNotEmpty ? matchingTeams.first.name : '';
+        final haystack =
+            ('$teamName ${game.location}').toLowerCase();
+        return haystack.contains(_searchQuery);
+      }).toList();
+    }
+
     Future<void> _refresh() async {
       final user = auth.user;
       if (user == null) return;
@@ -54,46 +98,46 @@ class GamesScreen extends StatelessWidget {
       await gameProvider.loadUpcomingGames(teamIds);
     }
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Text(
-          'Games',
-          style: GoogleFonts.inter(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
+    return SafeArea(
+      child: Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        appBar: AppBar(
+          title: Text(
+            'Games',
+            style: GoogleFonts.inter(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
           ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.public),
+              tooltip: 'Discover public games',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const DiscoverGamesScreen(),
+                  ),
+                );
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.history),
+              tooltip: 'Game history',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const GameHistoryScreen(),
+                  ),
+                );
+              },
+            ),
+          ],
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.public),
-            tooltip: 'Discover public games',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const DiscoverGamesScreen(),
-                ),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.history),
-            tooltip: 'Game history',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const GameHistoryScreen(),
-                ),
-              );
-            },
-          ),
-        ],
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: Column(
-        children: [
+        body: Column(
+          children: [
           if (nextGameNeedingStatus != null)
             Container(
               width: double.infinity,
@@ -124,6 +168,61 @@ class GamesScreen extends StatelessWidget {
                 ],
               ),
             ),
+          Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.search),
+                    labelText: 'Search games by team or location',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      _searchQuery = value.trim().toLowerCase();
+                    });
+                  },
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    ChoiceChip(
+                      label: const Text('All'),
+                      selected: _filter == GamesFilter.all,
+                      onSelected: (_) {
+                        setState(() {
+                          _filter = GamesFilter.all;
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('Need response'),
+                      selected: _filter == GamesFilter.needingResponse,
+                      onSelected: (_) {
+                        setState(() {
+                          _filter = GamesFilter.needingResponse;
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text("I'm in"),
+                      selected: _filter == GamesFilter.imIn,
+                      onSelected: (_) {
+                        setState(() {
+                          _filter = GamesFilter.imIn;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            ),
           Expanded(
             child: RefreshIndicator(
               onRefresh: _refresh,
@@ -141,15 +240,29 @@ class GamesScreen extends StatelessWidget {
                             ),
                           ),
                         )
-                      : ListView.builder(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 16,
-                          ),
-                          itemCount: games.length,
-                          itemBuilder: (context, index) {
-                            final game = games[index];
+                      : filteredGames.isEmpty
+                          ? const Center(
+                              child: Padding(
+                                padding:
+                                    EdgeInsets.symmetric(horizontal: 32),
+                                child: EmptyState(
+                                  icon: Icons.sports_soccer,
+                                  title: 'No games match your filters',
+                                  message:
+                                      'Try clearing the search or filters to see more games.',
+                                ),
+                              ),
+                            )
+                          : ListView.builder(
+                              physics:
+                                  const AlwaysScrollableScrollPhysics(),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
+                              itemCount: filteredGames.length,
+                              itemBuilder: (context, index) {
+                            final game = filteredGames[index];
                             final matchingTeams = teamProvider.teams
                                 .where((t) => t.id == game.teamId)
                                 .toList();
@@ -200,8 +313,11 @@ class GamesScreen extends StatelessWidget {
                             final maybeCount = game.getMaybeCount();
                             final outCount = game.getDeclinedCount();
                             final maxPlayers = game.maxPlayersIn;
-                            final isFull =
-                                maxPlayers != null && inCount >= maxPlayers;
+                            final totalGuests = game.getTotalGuestCount();
+                            final totalInIncludingGuests =
+                                inCount + totalGuests;
+                            final isFull = maxPlayers != null &&
+                                totalInIncludingGuests >= maxPlayers;
 
                             final confirmedIds = game.getPlayersWithStatus(
                               ConfirmationStatus.confirmed,
@@ -213,15 +329,6 @@ class GamesScreen extends StatelessWidget {
                                       (id == currentUserId ? 'You' : 'Player'),
                                 )
                                 .toList();
-                            String confirmedLabel;
-                            if (confirmedNames.isEmpty) {
-                              confirmedLabel = 'No one confirmed yet';
-                            } else if (confirmedNames.length <= 3) {
-                              confirmedLabel = confirmedNames.join(', ');
-                            } else {
-                              confirmedLabel =
-                                  '${confirmedNames.take(3).join(', ')} +${confirmedNames.length - 3}';
-                            }
 
                             return InkWell(
                               onTap: () {
@@ -263,7 +370,7 @@ class GamesScreen extends StatelessWidget {
                                                 '$weekday, $month $day',
                                                 style: GoogleFonts.inter(
                                                   fontSize: 12,
-                                                  color: Colors.grey.shade600,
+                                                  color: onSurfaceColor,
                                                 ),
                                               ),
                                               const SizedBox(height: 2),
@@ -292,7 +399,7 @@ class GamesScreen extends StatelessWidget {
                                             : game.location,
                                         style: GoogleFonts.inter(
                                           fontSize: 13,
-                                          color: Colors.grey.shade600,
+                                          color: onSurfaceColor,
                                         ),
                                       ),
                                       const SizedBox(height: 4),
@@ -312,61 +419,108 @@ class GamesScreen extends StatelessWidget {
                                                 : 'Code required',
                                             style: GoogleFonts.inter(
                                               fontSize: 11,
-                                              color: Colors.grey.shade600,
+                                              color: onSurfaceColor,
                                             ),
                                           ),
                                         ],
                                       ),
                                       if (maxPlayers != null) ...[
                                         const SizedBox(height: 4),
-                                        Row(
-                                          children: [
-                                            Text(
-                                              'In $inCount / $maxPlayers',
-                                              style: GoogleFonts.inter(
-                                                fontSize: 12,
-                                                color: isFull
-                                                    ? Colors.red
-                                                    : Colors.grey.shade700,
-                                              ),
-                                            ),
-                                            if (isFull) ...[
-                                              const SizedBox(width: 6),
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                  horizontal: 6,
-                                                  vertical: 2,
+                                        Builder(
+                                          builder: (context) {
+                                            final spotsLeft = maxPlayers -
+                                                totalInIncludingGuests;
+                                            final occupancyPercent =
+                                                (totalInIncludingGuests /
+                                                        maxPlayers *
+                                                        100)
+                                                    .round();
+                                            return Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Text(
+                                                      'In $totalInIncludingGuests / $maxPlayers',
+                                                      style:
+                                                          GoogleFonts.inter(
+                                                        fontSize: 12,
+                                                        color: isFull
+                                                            ? Colors.red
+                                                            : onSurfaceColor,
+                                                      ),
+                                                    ),
+                                                    if (isFull) ...[
+                                                      const SizedBox(width: 6),
+                                                      Container(
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                          horizontal: 6,
+                                                          vertical: 2,
+                                                        ),
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: Colors.red
+                                                              .withOpacity(
+                                                                  0.08),
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(8),
+                                                        ),
+                                                        child: Text(
+                                                          'Full',
+                                                          style: GoogleFonts
+                                                              .inter(
+                                                            fontSize: 11,
+                                                            color: Colors.red,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ],
                                                 ),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.red
-                                                      .withOpacity(0.08),
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                ),
-                                                child: Text(
-                                                  'Full',
-                                                  style: GoogleFonts.inter(
-                                                    fontSize: 11,
-                                                    color: Colors.red,
-                                                    fontWeight: FontWeight.w600,
+                                                if (!isFull && spotsLeft <= 3)
+                                                  Text(
+                                                    spotsLeft == 1
+                                                        ? 'Only 1 spot left'
+                                                        : 'Only $spotsLeft spots left',
+                                                    style: GoogleFonts.inter(
+                                                      fontSize: 11,
+                                                      color: Colors.orange,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  )
+                                                else if (!isFull &&
+                                                    occupancyPercent >= 70)
+                                                  Text(
+                                                    'Game is $occupancyPercent% full',
+                                                    style: GoogleFonts.inter(
+                                                      fontSize: 11,
+                                                      color: onSurfaceColor,
+                                                    ),
                                                   ),
-                                                ),
-                                              ),
-                                            ],
-                                          ],
+                                              ],
+                                            );
+                                          },
                                         ),
                                       ],
                                       const SizedBox(height: 8),
                                       if (confirmedIds.isNotEmpty)
                                         Padding(
-                                          padding:
-                                              const EdgeInsets.only(bottom: 4),
+                                          padding: const EdgeInsets.only(
+                                              bottom: 4),
                                           child: Text(
-                                            'In: $confirmedLabel',
+                                            confirmedNames.length == 1
+                                                ? 'In: ${confirmedNames.first}'
+                                                : 'In: ${confirmedNames.first} and ${confirmedNames.length - 1} others',
                                             style: GoogleFonts.inter(
                                               fontSize: 12,
-                                              color: Colors.grey.shade700,
+                                              color: onSurfaceColor,
                                             ),
                                           ),
                                         ),
@@ -496,11 +650,10 @@ class GamesScreen extends StatelessWidget {
                         ),
             ),
           ),
-          const SizedBox(height: 8),
-          const AdBanner(),
-          const SizedBox(height: 4),
         ],
       ),
-    );
+      bottomNavigationBar: const AdBanner(),
+    ),
+  );
   }
 }

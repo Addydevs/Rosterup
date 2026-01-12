@@ -24,6 +24,8 @@ class Game {
   final bool isPublic;
   final String? accessCode;
   final Map<String, ConfirmationStatus> confirmations; // userId -> status
+  final Map<String, int> guestCounts; // userId -> extra guests (e.g. plus ones)
+  final Map<String, String> declineReasons; // userId -> reason code
   final DateTime createdAt;
   final DateTime updatedAt;
   final bool isActive;
@@ -42,11 +44,14 @@ class Game {
     this.isPublic = true,
     this.accessCode,
     required this.confirmations,
+    Map<String, int>? guestCounts,
+    Map<String, String>? declineReasons,
     required this.createdAt,
     required this.updatedAt,
     this.isActive = true,
     this.notes,
-  });
+  })  : guestCounts = guestCounts ?? const {},
+        declineReasons = declineReasons ?? const {};
 
   factory Game.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -63,6 +68,25 @@ class Game {
       confirmations[userId] = status;
     });
 
+    // Convert guestCounts map (userId -> int)
+    final guestCountsData = data['guestCounts'] as Map<String, dynamic>? ?? {};
+    final guestCounts = <String, int>{};
+    guestCountsData.forEach((userId, value) {
+      if (value is int) {
+        guestCounts[userId] = value;
+      }
+    });
+
+    // Decline reasons (userId -> String)
+    final declineReasonsData =
+        data['declineReasons'] as Map<String, dynamic>? ?? {};
+    final declineReasons = <String, String>{};
+    declineReasonsData.forEach((userId, value) {
+      if (value is String && value.isNotEmpty) {
+        declineReasons[userId] = value;
+      }
+    });
+
     return Game(
       id: doc.id,
       teamId: data['teamId'] ?? '',
@@ -76,6 +100,8 @@ class Game {
       isPublic: data['isPublic'] ?? true,
       accessCode: data['accessCode'],
       confirmations: confirmations,
+      guestCounts: guestCounts,
+      declineReasons: declineReasons,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       isActive: data['isActive'] ?? true,
@@ -90,6 +116,22 @@ class Game {
       confirmationsData[userId] = status.name;
     });
 
+    // Guest counts map (userId -> int)
+    final guestCountsData = <String, int>{};
+    guestCounts.forEach((userId, count) {
+      if (count > 0) {
+        guestCountsData[userId] = count;
+      }
+    });
+
+    // Decline reasons
+    final declineReasonsData = <String, String>{};
+    declineReasons.forEach((userId, reason) {
+      if (reason.isNotEmpty) {
+        declineReasonsData[userId] = reason;
+      }
+    });
+
     return {
       'teamId': teamId,
       'dateTime': Timestamp.fromDate(dateTime),
@@ -102,6 +144,8 @@ class Game {
       'isPublic': isPublic,
       'accessCode': accessCode,
       'confirmations': confirmationsData,
+      'guestCounts': guestCountsData,
+      'declineReasons': declineReasonsData,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
       'isActive': isActive,
@@ -122,6 +166,11 @@ class Game {
   int getMaybeCount() => getPlayersWithStatus(ConfirmationStatus.maybe).length;
   int getNoResponseCount() => getPlayersWithStatus(ConfirmationStatus.noResponse).length;
 
+  int getTotalGuestCount() {
+    if (guestCounts.isEmpty) return 0;
+    return guestCounts.values.fold(0, (sum, value) => sum + value);
+  }
+
   double getConfirmationRate() {
     if (confirmations.isEmpty) return 0.0;
     return getConfirmedCount() / confirmations.length;
@@ -141,6 +190,8 @@ class Game {
     bool? isPublic,
     String? accessCode,
     Map<String, ConfirmationStatus>? confirmations,
+    Map<String, int>? guestCounts,
+    Map<String, String>? declineReasons,
     bool? isActive,
     String? notes,
   }) {
@@ -157,6 +208,8 @@ class Game {
       isPublic: isPublic ?? this.isPublic,
       accessCode: accessCode ?? this.accessCode,
       confirmations: confirmations ?? this.confirmations,
+      guestCounts: guestCounts ?? this.guestCounts,
+      declineReasons: declineReasons ?? this.declineReasons,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
       isActive: isActive ?? this.isActive,

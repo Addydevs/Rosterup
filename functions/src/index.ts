@@ -20,6 +20,33 @@ async function getUserTokens(userIds: string[]): Promise<string[]> {
   return tokens;
 }
 
+async function getUserTokensWithPreference(
+  userIds: string[],
+  preferenceKey: string
+): Promise<string[]> {
+  if (userIds.length === 0) return [];
+
+  const tokens: string[] = [];
+  for (const uid of userIds) {
+    const snap = await db.collection("users").doc(uid).get();
+    if (!snap.exists) continue;
+
+    const data = snap.data() || {};
+    const prefs = (data.preferences as Record<string, unknown>) || {};
+
+    const masterEnabled = prefs["notificationsEnabled"];
+    if (masterEnabled === false) continue;
+
+    const typeEnabled = prefs[preferenceKey];
+    if (typeEnabled === false) continue;
+
+    const userTokens = (data.fcmTokens as string[]) || [];
+    tokens.push(...userTokens);
+  }
+
+  return tokens;
+}
+
 function toTimestamp(date: Date): admin.firestore.Timestamp {
   return admin.firestore.Timestamp.fromDate(date);
 }
@@ -36,7 +63,10 @@ exports.onGameCreated = functions.firestore
 
     const team = teamSnap.data() || {};
     const memberIds = (team.memberIds as string[]) || [];
-    const tokens = await getUserTokens(memberIds);
+    const tokens = await getUserTokensWithPreference(
+      memberIds,
+      "notificationsTeamAnnouncements"
+    );
 
     if (tokens.length === 0) return;
 
@@ -88,7 +118,10 @@ exports.scheduledGameReminders = functions.pubsub
       if (!teamSnap.exists) continue;
       const team = teamSnap.data() || {};
       const memberIds = (team.memberIds as string[]) || [];
-      const tokens = await getUserTokens(memberIds);
+      const tokens = await getUserTokensWithPreference(
+        memberIds,
+        "notificationsGameReminders"
+      );
       if (tokens.length === 0) continue;
 
       const payload: admin.messaging.MulticastMessage = {
@@ -106,6 +139,72 @@ exports.scheduledGameReminders = functions.pubsub
 
       await admin.messaging().sendEachForMulticast(payload);
       await doc.ref.set({ reminder24Sent: true }, { merge: true });
+    }
+
+    // 2-hour reminders (smart): only for users who are "confirmed"/"going".
+    const twoHourStart = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    const twoHourEnd = new Date(twoHourStart.getTime() + 5 * 60 * 1000);
+
+    const twoHourSnapshot = await db
+      .collection("games")
+      .where("isActive", "==", true)
+      .where("dateTime", ">=", toTimestamp(twoHourStart))
+      .where("dateTime", "<", toTimestamp(twoHourEnd))
+      .where("reminder2hSent", "==", false)
+      .get()
+      .catch(async (e) => {
+        console.error("2h reminder query error", e);
+        return await db
+          .collection("games")
+          .where("isActive", "==", true)
+          .where("dateTime", ">=", toTimestamp(twoHourStart))
+          .where("dateTime", "<", toTimestamp(twoHourEnd))
+          .get();
+      });
+
+    for (const doc of twoHourSnapshot.docs) {
+      const game = doc.data() as any;
+      const confirmations = (game.confirmations as Record<string, string>) || {};
+      const goingUserIds = Object.entries(confirmations)
+        .filter(([, status]) => status === "confirmed")
+        .map(([uid]) => uid);
+
+      if (goingUserIds.length === 0) {
+        await doc.ref.set({ reminder2hSent: true }, { merge: true });
+        continue;
+      }
+
+      const teamSnap = await db.collection("teams").doc(game.teamId).get();
+      if (!teamSnap.exists) {
+        await doc.ref.set({ reminder2hSent: true }, { merge: true });
+        continue;
+      }
+
+      const team = teamSnap.data() || {};
+      const tokens = await getUserTokensWithPreference(
+        goingUserIds,
+        "notificationsGameReminders"
+      );
+      if (tokens.length === 0) {
+        await doc.ref.set({ reminder2hSent: true }, { merge: true });
+        continue;
+      }
+
+      const payload: admin.messaging.MulticastMessage = {
+        tokens,
+        notification: {
+          title: "Game soon",
+          body: `Your game with ${team.name || "your team"} starts in 2 hours.`,
+        },
+        data: {
+          type: "game_reminder_2h",
+          gameId: doc.id,
+          teamId: game.teamId as string,
+        },
+      };
+
+      await admin.messaging().sendEachForMulticast(payload);
+      await doc.ref.set({ reminder2hSent: true }, { merge: true });
     }
 
     // 1-hour reminders: window from now+1h to now+1h+5m
@@ -135,7 +234,10 @@ exports.scheduledGameReminders = functions.pubsub
       if (!teamSnap.exists) continue;
       const team = teamSnap.data() || {};
       const memberIds = (team.memberIds as string[]) || [];
-      const tokens = await getUserTokens(memberIds);
+      const tokens = await getUserTokensWithPreference(
+        memberIds,
+        "notificationsGameReminders"
+      );
       if (tokens.length === 0) continue;
 
       const payload: admin.messaging.MulticastMessage = {
@@ -177,7 +279,10 @@ exports.onGameConfirmationChanged = functions.firestore
 
     const team = teamSnap.data() || {};
     const adminId = team.adminId as string;
-    const tokens = await getUserTokens([adminId]);
+    const tokens = await getUserTokensWithPreference(
+      [adminId],
+      "notificationsTeamAnnouncements"
+    );
     if (tokens.length === 0) return;
 
     const payload: admin.messaging.MulticastMessage = {
@@ -208,7 +313,12 @@ exports.onTeamChatMessage = functions.firestore
 
     const team = teamSnap.data() || {};
     const memberIds = (team.memberIds as string[]) || [];
-    const tokens = await getUserTokens(memberIds);
+    const senderId = message.senderId as string | undefined;
+    const recipientIds = memberIds.filter((id) => id !== senderId);
+    const tokens = await getUserTokensWithPreference(
+      recipientIds,
+      "notificationsChatMessages"
+    );
     if (tokens.length === 0) return;
 
     const payload: admin.messaging.MulticastMessage = {

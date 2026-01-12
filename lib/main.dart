@@ -93,18 +93,17 @@ class RosterUpApp extends StatelessWidget {
       child: Consumer<UserProvider>(
         builder: (context, userProvider, _) {
           final prefs = userProvider.currentUser?.preferences ?? {};
-          final themePref = prefs['theme'] as String? ?? 'system';
+          final themePref = prefs['theme'] as String? ?? 'light';
 
           ThemeMode themeMode;
           switch (themePref) {
-            case 'light':
-              themeMode = ThemeMode.light;
-              break;
             case 'dark':
               themeMode = ThemeMode.dark;
               break;
             default:
-              themeMode = ThemeMode.system;
+              // Default to light mode if no preference or an old
+              // "system" value is stored.
+              themeMode = ThemeMode.light;
           }
 
           return MaterialApp(

@@ -109,12 +109,17 @@ class TeamProvider extends ChangeNotifier {
       await _firestore.collection('teams').doc(team.id).set(team.toFirestore());
       
       _teams.add(team);
-      // Analytics: team created
-      await AnalyticsService.logCreateTeam(
-        teamId: team.id,
-        sport: sport.name,
-        hasCustomSport: (customSportName ?? '').isNotEmpty,
-      );
+      // Analytics: team created (do not fail creation if analytics throws)
+      try {
+        await AnalyticsService.logCreateTeam(
+          teamId: team.id,
+          sport: sport.name,
+          hasCustomSport: (customSportName ?? '').isNotEmpty,
+        );
+      } catch (e) {
+        // Record analytics error but don't break the user flow
+        _error = e.toString();
+      }
       return team.id;
     } catch (e) {
       _error = e.toString();
@@ -226,6 +231,47 @@ class TeamProvider extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       _error = e.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<bool> deleteTeam({
+    required String teamId,
+    required String requesterId,
+  }) async {
+    try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+
+      final index = _teams.indexWhere((t) => t.id == teamId);
+      if (index == -1) {
+        _error = 'Team not found';
+        return false;
+      }
+
+      final team = _teams[index];
+      final isAdmin = team.adminId == requesterId;
+      if (!isAdmin) {
+        _error = 'Only admins can delete the team';
+        return false;
+      }
+
+      await _firestore.collection('teams').doc(teamId).update({
+        'isActive': false,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      _teams[index] = team.copyWith(isActive: false);
+      _teams = _teams.where((t) => t.isActive).toList();
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    } finally {
+      _isLoading = false;
       notifyListeners();
     }
   }

@@ -8,6 +8,7 @@ import '../providers/chat_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
 import '../providers/report_provider.dart';
+import '../widgets/ad_banner.dart';
 
 class TeamChatScreen extends StatefulWidget {
   final String teamId;
@@ -46,6 +47,7 @@ class _TeamChatScreenState extends State<TeamChatScreen> {
         team.mutedMemberIds.contains(currentUserId);
     final isAdmin =
         currentUserId != null && currentUserId == team.adminId;
+    final onSurfaceColor = Theme.of(context).colorScheme.onSurface;
 
     return Scaffold(
       appBar: AppBar(
@@ -54,150 +56,166 @@ class _TeamChatScreenState extends State<TeamChatScreen> {
           style: GoogleFonts.inter(
             fontSize: 18,
             fontWeight: FontWeight.w600,
+            color: onSurfaceColor,
           ),
         ),
-        backgroundColor: Colors.white,
+        foregroundColor: onSurfaceColor,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
       ),
-      backgroundColor: Colors.white,
-      body: Column(
-        children: [
-          Expanded(
-            child: messages.isEmpty
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 32),
-                      child: Text(
-                        'No messages yet.\nBe the first to say hello 👋',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    reverse: false,
-                    itemCount: messages.length,
-                    itemBuilder: (context, index) {
-                      final message = messages[index];
-                      final isMine = message.senderId == currentUserId;
-
-                      return GestureDetector(
-                        onLongPress: () => _showMessageActions(
-                          context,
-                          message,
-                          isMine: isMine,
-                          isAdmin: isAdmin,
-                        ),
-                        child: Align(
-                          alignment: isMine
-                              ? Alignment.centerRight
-                              : Alignment.centerLeft,
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(
-                              vertical: 4,
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            constraints: BoxConstraints(
-                              maxWidth:
-                                  MediaQuery.of(context).size.width * 0.7,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isMine
-                                  ? Theme.of(context)
-                                      .colorScheme
-                                      .primary
-                                      .withOpacity(0.1)
-                                  : Colors.grey.shade100,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: isMine
-                                  ? CrossAxisAlignment.end
-                                  : CrossAxisAlignment.start,
-                              children: [
-                                if (!isMine)
-                                  Text(
-                                    message.senderName,
-                                    style: GoogleFonts.inter(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.grey.shade700,
-                                    ),
-                                  ),
-                                if (!isMine) const SizedBox(height: 2),
-                                Text(
-                                  message.text,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                              ],
-                            ),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: SafeArea(
+        top: true,
+        bottom: false,
+        child: Column(
+          children: [
+            Expanded(
+              child: messages.isEmpty
+                  ? Center(
+                        child: Padding(
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 32),
+                        child: Text(
+                          'No messages yet.\nBe the first to say hello 👋',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: onSurfaceColor,
                           ),
                         ),
-                      );
-                    },
-                  ),
-          ),
-          const Divider(height: 1),
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 8,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      textCapitalization: TextCapitalization.sentences,
-                      decoration: InputDecoration(
-                        hintText: isMuted
-                            ? 'You are muted by the admin'
-                            : 'Message ${team.name}',
-                        hintStyle: GoogleFonts.inter(
-                          fontSize: 14,
-                          color: Colors.grey.shade500,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
                       ),
-                      readOnly: isMuted,
-                      onSubmitted: (_) => _sendMessage(currentUserName),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      reverse: false,
+                      itemCount: messages.length,
+                      itemBuilder: (context, index) {
+                        final message = messages[index];
+                        final isMine = message.senderId == currentUserId;
+
+                        return GestureDetector(
+                          onLongPress: () => _showMessageActions(
+                            context,
+                            message,
+                            isMine: isMine,
+                            isAdmin: isAdmin,
+                          ),
+                          child: Align(
+                            alignment: isMine
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(
+                                vertical: 4,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              constraints: BoxConstraints(
+                                maxWidth: MediaQuery.of(context)
+                                        .size
+                                        .width *
+                                    0.7,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isMine
+                                    ? Theme.of(context)
+                                        .colorScheme
+                                        .primary
+                                        .withOpacity(0.1)
+                                    : Colors.grey.shade100,
+                                borderRadius:
+                                    BorderRadius.circular(16),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: isMine
+                                    ? CrossAxisAlignment.end
+                                    : CrossAxisAlignment.start,
+                                children: [
+                                  if (!isMine)
+                                    Text(
+                                      message.senderName,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: onSurfaceColor,
+                                      ),
+                                    ),
+                                  if (!isMine)
+                                    const SizedBox(height: 2),
+                                  Text(
+                                    message.text,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                  ),
-                  const SizedBox(height: 0, width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.send),
-                    color: Theme.of(context).colorScheme.primary,
-                    onPressed:
-                        isMuted ? null : () => _sendMessage(currentUserName),
-                  ),
-                ],
+            ),
+            const Divider(height: 1),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        textCapitalization:
+                            TextCapitalization.sentences,
+                        decoration: InputDecoration(
+                          hintText: isMuted
+                              ? 'You are muted by the admin'
+                              : 'Message ${team.name}',
+                          hintStyle: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: onSurfaceColor,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          contentPadding:
+                              const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                        ),
+                        readOnly: isMuted,
+                        onSubmitted: (_) =>
+                            _sendMessage(currentUserName),
+                      ),
+                    ),
+                    const SizedBox(height: 0, width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.send),
+                      color:
+                          Theme.of(context).colorScheme.primary,
+                      onPressed: isMuted
+                          ? null
+                          : () => _sendMessage(currentUserName),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
+      bottomNavigationBar: const AdBanner(),
     );
   }
 
@@ -236,19 +254,20 @@ class _TeamChatScreenState extends State<TeamChatScreen> {
       ),
       builder: (sheetContext) {
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                title: Text(
-                  'Message actions',
-                  style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w600,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  title: Text(
+                    'Message actions',
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
-              const Divider(height: 1),
-              ListTile(
+                const Divider(height: 1),
+                ListTile(
                 leading: const Icon(Icons.delete_outline),
                 title: const Text('Delete message'),
                 onTap: () async {
@@ -299,53 +318,54 @@ class _TeamChatScreenState extends State<TeamChatScreen> {
                   }
                 },
               ),
-              if (message.senderId != team.adminId)
-                ListTile(
-                  leading: Icon(
-                    isSenderMuted
-                        ? Icons.volume_off
-                        : Icons.volume_mute_outlined,
-                  ),
-                  title: Text(
-                    isSenderMuted
-                        ? 'Unmute user in chat'
-                        : 'Mute user in chat',
-                  ),
-                  onTap: () async {
-                    Navigator.of(sheetContext).pop();
+                if (message.senderId != team.adminId)
+                  ListTile(
+                    leading: Icon(
+                      isSenderMuted
+                          ? Icons.volume_off
+                          : Icons.volume_mute_outlined,
+                    ),
+                    title: Text(
+                      isSenderMuted
+                          ? 'Unmute user in chat'
+                          : 'Mute user in chat',
+                    ),
+                    onTap: () async {
+                      Navigator.of(sheetContext).pop();
 
-                    final success = await context
-                        .read<TeamProvider>()
-                        .muteMember(
-                          teamId: widget.teamId,
-                          memberId: message.senderId,
-                          requesterId: currentUserId,
-                          muted: !isSenderMuted,
+                      final success = await context
+                          .read<TeamProvider>()
+                          .muteMember(
+                            teamId: widget.teamId,
+                            memberId: message.senderId,
+                            requesterId: currentUserId,
+                            muted: !isSenderMuted,
+                          );
+
+                      if (!mounted) return;
+
+                      if (!success) {
+                        final error = context
+                                .read<TeamProvider>()
+                                .error ??
+                            'Could not update mute status.';
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(error)),
                         );
-
-                    if (!mounted) return;
-
-                    if (!success) {
-                      final error = context
-                              .read<TeamProvider>()
-                              .error ??
-                          'Could not update mute status.';
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(error)),
-                      );
-                    }
-                  },
-                ),
-              if (!isMine)
-                ListTile(
-                  leading: const Icon(Icons.flag_outlined),
-                  title: const Text('Report message'),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    _showReportMessageDialog(context, message);
-                  },
-                ),
-            ],
+                      }
+                    },
+                  ),
+                if (!isMine)
+                  ListTile(
+                    leading: const Icon(Icons.flag_outlined),
+                    title: const Text('Report message'),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      _showReportMessageDialog(context, message);
+                    },
+                  ),
+              ],
+            ),
           ),
         );
       },

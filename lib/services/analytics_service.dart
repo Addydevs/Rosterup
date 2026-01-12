@@ -68,5 +68,56 @@ class AnalyticsService {
       },
     );
   }
-}
 
+  static Future<void> logHomeTabViewed({required String tab}) {
+    return _analytics.logEvent(
+      name: 'home_tab_viewed',
+      parameters: {
+        'tab': tab,
+      },
+    );
+  }
+
+  static Future<void> logTeamShare({
+    required String teamId,
+  }) {
+    return _analytics.logEvent(
+      name: 'team_share_clicked',
+      parameters: {
+        'team_id': teamId,
+      },
+    );
+  }
+
+  static Future<void> logGameShare({
+    required String gameId,
+    required String teamId,
+    required bool isPublic,
+    required bool hasAccessCode,
+  }) {
+    return _analytics.logEvent(
+      name: 'game_share_clicked',
+      parameters: {
+        'game_id': gameId,
+        'team_id': teamId,
+        'is_public': isPublic,
+        'has_access_code': hasAccessCode,
+      },
+    );
+  }
+
+  static Future<void> logGamePlusOneToggled({
+    required String gameId,
+    required String teamId,
+    required bool hasGuest,
+  }) {
+    return _analytics.logEvent(
+      name: 'game_plus_one_toggled',
+      parameters: {
+        'game_id': gameId,
+        'team_id': teamId,
+        'has_guest': hasGuest,
+      },
+    );
+  }
+}

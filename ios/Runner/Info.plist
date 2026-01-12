@@ -53,5 +53,15 @@
 	<string>RosterUp sends notifications for game reminders, team updates, and chat messages.</string>
 	<key>GADApplicationIdentifier</key>
 	<string>ca-app-pub-9003779081896617~5778789914</string>
+	<!-- Custom URL scheme for deep links like rosterup://join-team?code=WMH8KQ -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>rosterup</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

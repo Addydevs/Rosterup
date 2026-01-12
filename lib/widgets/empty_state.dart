@@ -35,7 +35,7 @@ class EmptyState extends StatelessWidget {
           style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w600,
-            color: Colors.grey.shade900,
+            color: colorScheme.onSurface,
           ),
         ),
         const SizedBox(height: 8),
@@ -44,7 +44,7 @@ class EmptyState extends StatelessWidget {
           textAlign: TextAlign.center,
           style: GoogleFonts.inter(
             fontSize: 14,
-            color: Colors.grey.shade600,
+            color: colorScheme.onSurface,
           ),
         ),
         if (primaryActionLabel != null && onPrimaryAction != null) ...[
@@ -63,4 +63,3 @@ class EmptyState extends StatelessWidget {
     );
   }
 }
-

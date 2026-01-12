@@ -14,6 +14,11 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
 
   AuthProvider() {
+    // Seed with any already-signed-in Firebase user so that
+    // `isAuthenticated` is accurate on app startup before the
+    // authStateChanges stream emits its first value.
+    _user = _auth.currentUser;
+
     // Listen to auth state changes
     _auth.authStateChanges().listen((User? user) {
       _user = user;
@@ -70,6 +75,19 @@ class AuthProvider extends ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  Future<bool> sendPasswordResetEmail(String email) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+      return true;
+    } on FirebaseAuthException catch (e) {
+      debugPrint('Password reset error: ${e.message}');
+      return false;
+    } catch (e) {
+      debugPrint('Password reset error (unexpected): $e');
+      return false;
     }
   }
 

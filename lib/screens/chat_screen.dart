@@ -15,87 +15,90 @@ class ChatScreen extends StatelessWidget {
     final teamProvider = context.watch<TeamProvider>();
     final chatProvider = context.watch<ChatProvider>();
     final teams = teamProvider.teams;
+    final onSurfaceColor = Theme.of(context).colorScheme.onSurface;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
           'Chat',
           style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w600,
+            color: onSurfaceColor,
           ),
         ),
-        backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: teams.isEmpty
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 32),
-                      child: Text(
-                        'Join or create a team to start chatting.',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          color: Colors.grey.shade600,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: teams.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 32),
+                        child: Text(
+                          'Join or create a team to start chatting.',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: onSurfaceColor,
+                          ),
                         ),
                       ),
-                    ),
-                  )
-                : ListView.builder(
-                    itemCount: teams.length,
-                    itemBuilder: (context, index) {
-                      final team = teams[index];
-                      final messages =
-                          chatProvider.messagesForTeam(team.id);
-                      final lastMessage =
-                          messages.isNotEmpty ? messages.last : null;
+                    )
+                  : ListView.builder(
+                      itemCount: teams.length,
+                      itemBuilder: (context, index) {
+                        final team = teams[index];
+                        final messages =
+                            chatProvider.messagesForTeam(team.id);
+                        final lastMessage =
+                            messages.isNotEmpty ? messages.last : null;
 
-                      return ListTile(
-                        leading: CircleAvatar(
-                          child: Text(
-                            team.sport.emoji,
-                            style: const TextStyle(fontSize: 20),
-                          ),
-                        ),
-                        title: Text(
-                          team.name,
-                          style: GoogleFonts.inter(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        subtitle: Text(
-                          lastMessage?.text ?? 'No messages yet',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  TeamChatScreen(teamId: team.id),
+                        return ListTile(
+                          leading: CircleAvatar(
+                            child: Text(
+                              team.sport.emoji,
+                              style: const TextStyle(fontSize: 20),
                             ),
-                          );
-                        },
-                      );
-                    },
-                  ),
-          ),
-          const SizedBox(height: 8),
-          const AdBanner(),
-          const SizedBox(height: 4),
-        ],
+                          ),
+                          title: Text(
+                            team.name,
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: onSurfaceColor,
+                            ),
+                          ),
+                          subtitle: Text(
+                            lastMessage?.text ?? 'No messages yet',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: onSurfaceColor,
+                            ),
+                          ),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    TeamChatScreen(teamId: team.id),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
+      bottomNavigationBar: const AdBanner(),
     );
   }
 }

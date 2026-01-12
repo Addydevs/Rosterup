@@ -1,4 +1,4 @@
-package com.addydevs.rosterup.app
+package com.addydevs.rosterupV2
 
 import io.flutter.embedding.android.FlutterActivity
 

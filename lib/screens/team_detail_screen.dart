@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../models/team.dart';
 import '../models/user.dart';
@@ -12,6 +14,8 @@ import '../providers/user_provider.dart';
 import '../providers/report_provider.dart';
 import '../widgets/location_picker.dart';
 import '../models/game.dart';
+import '../widgets/ad_banner.dart';
+import '../services/analytics_service.dart';
 import 'game_detail_screen.dart';
 
 class TeamDetailScreen extends StatelessWidget {
@@ -81,6 +85,7 @@ class TeamDetailScreen extends StatelessWidget {
     final isAdmin = currentUserId != null && currentUserId == team.adminId;
     final gameProvider = context.watch<GameProvider>();
     final teamGames = gameProvider.getGamesForTeam(teamId);
+    final onSurfaceColor = Theme.of(context).colorScheme.onSurface;
 
     void showScheduleSheet() {
       final existingSchedule = team.recurringSchedule;
@@ -90,6 +95,15 @@ class TeamDetailScreen extends StatelessWidget {
             slot.dayOfWeek: slot.time,
       };
 
+      final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+      String formatTime(TimeOfDay time) {
+        final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+        final minute = time.minute.toString().padLeft(2, '0');
+        final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+        return '$hour:$minute $period';
+      }
+
       showModalBottomSheet(
         context: context,
         isScrollControlled: true,
@@ -97,130 +111,137 @@ class TeamDetailScreen extends StatelessWidget {
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         builder: (sheetContext) {
-          return Padding(
-            padding: EdgeInsets.only(
-              left: 16,
-              right: 16,
-              top: 16,
-              bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
-            ),
+          return SafeArea(
+            top: false,
             child: StatefulBuilder(
               builder: (context, setState) {
-                String formatTime(TimeOfDay time) {
-                  final hour =
-                      time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
-                  final minute = time.minute.toString().padLeft(2, '0');
-                  final period =
-                      time.period == DayPeriod.am ? 'AM' : 'PM';
-                  return '$hour:$minute $period';
-                }
-
-                const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(2),
+                return SingleChildScrollView(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      left: 16,
+                      right: 16,
+                      top: 16,
+                      bottom:
+                          MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 40,
+                            height: 4,
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    Text(
-                      'Schedule weekly game',
-                      style: GoogleFonts.inter(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Select the days your team usually plays and a start time. You can change this anytime.',
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: List.generate(days.length, (index) {
-                        final dayIndex = index + 1; // 1 = Monday
-                        final time = dayTimes[dayIndex];
-                        final isSelected = time != null;
-                        final label = isSelected
-                            ? '${days[index]} ${formatTime(time)}'
-                            : days[index];
-
-                        return FilterChip(
-                          label: Text(label),
-                          selected: isSelected,
-                          onSelected: (selected) async {
-                            if (selected) {
-                              final initialTime = time ??
-                                  const TimeOfDay(hour: 19, minute: 0);
-                              final picked = await showTimePicker(
-                                context: context,
-                                initialTime: initialTime,
-                              );
-                              if (picked != null) {
-                                setState(() {
-                                  dayTimes[dayIndex] = picked;
-                                });
-                              }
-                            } else {
-                              setState(() {
-                                dayTimes.remove(dayIndex);
-                              });
-                            }
-                          },
-                        );
-                      }),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                      onPressed: () async {
-                          if (dayTimes.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content:
-                                    Text('Select at least one day of the week'),
-                              ),
-                            );
-                            return;
-                          }
-
-                          await context.read<TeamProvider>().setRecurringSchedule(
-                                teamId: team.id,
-                                dayTimes: dayTimes,
-                              );
-
-                          await _createGamesFromSchedule(
-                            context,
-                            team,
-                            dayTimes,
-                          );
-
-                          Navigator.of(sheetContext).pop();
-                        },
-                        child: Text(
-                          'Save schedule',
+                        Text(
+                          'Schedule weekly game',
                           style: GoogleFonts.inter(
+                            fontSize: 18,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                      ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Select the days your team usually plays and a start time. You can change this anytime.',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: onSurfaceColor,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: List.generate(days.length, (index) {
+                            final dayIndex = index + 1; // 1 = Monday
+                            final time = dayTimes[dayIndex];
+                            final isSelected = time != null;
+                            final label = isSelected
+                                ? '${days[index]} ${formatTime(time)}'
+                                : days[index];
+
+                            return FilterChip(
+                              label: Text(label),
+                              selected: isSelected,
+                              onSelected: (selected) async {
+                                if (selected) {
+                                  final initialTime = time ??
+                                      const TimeOfDay(hour: 19, minute: 0);
+                                  final picked = await showTimePicker(
+                                    context: context,
+                                    initialTime: initialTime,
+                                  );
+                                  if (picked != null) {
+                                    setState(() {
+                                      dayTimes[dayIndex] = picked;
+                                    });
+                                  }
+                                } else {
+                                  setState(() {
+                                    dayTimes.remove(dayIndex);
+                                  });
+                                }
+                              },
+                            );
+                          }),
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton(
+                            onPressed: () async {
+                              if (dayTimes.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Select at least one day of the week',
+                                    ),
+                                  ),
+                                );
+                                return;
+                              }
+
+                              await context
+                                  .read<TeamProvider>()
+                                  .setRecurringSchedule(
+                                    teamId: team.id,
+                                    dayTimes: dayTimes,
+                                  );
+
+                              await _createGamesFromSchedule(
+                                context,
+                                team,
+                                dayTimes,
+                              );
+
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content:
+                                        Text('Weekly games scheduled'),
+                                  ),
+                                );
+                              }
+
+                              Navigator.of(sheetContext).pop();
+                            },
+                            child: Text(
+                              'Save schedule',
+                              style: GoogleFonts.inter(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 );
               },
             ),
@@ -230,7 +251,7 @@ class TeamDetailScreen extends StatelessWidget {
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
           team.name,
@@ -355,6 +376,60 @@ class TeamDetailScreen extends StatelessWidget {
                       SnackBar(content: Text(error)),
                     );
                   }
+                } else if (value == 'delete_team') {
+                  final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Delete team'),
+                          content: Text(
+                            'Are you sure you want to delete ${team.name}? '
+                            'This will remove the team for all members. '
+                            'This action is permanent and cannot be undone.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () =>
+                                  Navigator.of(ctx).pop(false),
+                              child: const Text('Cancel'),
+                            ),
+                            TextButton(
+                              onPressed: () =>
+                                  Navigator.of(ctx).pop(true),
+                              child: const Text(
+                                'Delete',
+                                style: TextStyle(color: Colors.red),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ) ??
+                      false;
+
+                  if (!confirmed) return;
+
+                  final success = await context
+                      .read<TeamProvider>()
+                      .deleteTeam(
+                        teamId: team.id,
+                        requesterId: currentUserId!,
+                      );
+
+                  if (!context.mounted) return;
+
+                  if (success) {
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('${team.name} deleted'),
+                      ),
+                    );
+                  } else {
+                    final error = context.read<TeamProvider>().error ??
+                        'Could not delete team.';
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(error)),
+                    );
+                  }
                 }
               },
               itemBuilder: (context) => const [
@@ -362,16 +437,20 @@ class TeamDetailScreen extends StatelessWidget {
                   value: 'rename',
                   child: Text('Edit team name'),
                 ),
+                PopupMenuItem(
+                  value: 'delete_team',
+                  child: Text('Delete team'),
+                ),
               ],
             )
         ],
-        backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
           Card(
             elevation: 0,
             color: Colors.white,
@@ -410,7 +489,7 @@ class TeamDetailScreen extends StatelessWidget {
                               : team.sport.label,
                           style: GoogleFonts.inter(
                             fontSize: 13,
-                            color: Colors.grey.shade700,
+                            color: onSurfaceColor,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -420,7 +499,7 @@ class TeamDetailScreen extends StatelessWidget {
                               : team.location,
                           style: GoogleFonts.inter(
                             fontSize: 13,
-                            color: Colors.grey.shade600,
+                            color: onSurfaceColor,
                           ),
                         ),
                       ],
@@ -433,7 +512,7 @@ class TeamDetailScreen extends StatelessWidget {
                         'Code',
                         style: GoogleFonts.inter(
                           fontSize: 11,
-                          color: Colors.grey.shade500,
+                          color: onSurfaceColor,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -465,6 +544,33 @@ class TeamDetailScreen extends StatelessWidget {
                               );
                             },
                           ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.ios_share,
+                              size: 18,
+                            ),
+                            tooltip: 'Share team code',
+                            onPressed: () {
+                              final message =
+                                  'Join my team on RosterUp with code ${team.teamCode}. '
+                                  'Download the RosterUp app and enter the code in Teams → Join by code.';
+                              AnalyticsService.logTeamShare(teamId: team.id);
+                              Share.share(
+                                message,
+                                subject: 'Join my team on RosterUp',
+                              );
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.qr_code_2,
+                              size: 22,
+                            ),
+                            tooltip: 'Show join QR',
+                            onPressed: () {
+                              _showTeamQrSheet(context, team);
+                            },
+                          ),
                         ],
                       ),
                     ],
@@ -474,6 +580,43 @@ class TeamDetailScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
+          FutureBuilder<List<Game>>(
+            future: gameProvider.fetchPastGames([teamId]),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const SizedBox.shrink();
+              }
+              if (snapshot.hasError || !snapshot.hasData) {
+                return const SizedBox.shrink();
+              }
+              final games = snapshot.data!;
+              final now = DateTime.now();
+              final monthGames = games.where((g) =>
+                  g.dateTime.year == now.year &&
+                  g.dateTime.month == now.month);
+              final count = monthGames.length;
+              if (count == 0) return const SizedBox.shrink();
+              return Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.04),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.green.withOpacity(0.12)),
+                ),
+                child: Text(
+                  count == 1
+                      ? 'Your team has played 1 game this month.'
+                      : 'Your team has played $count games this month!',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: onSurfaceColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              );
+            },
+          ),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -506,7 +649,7 @@ class TeamDetailScreen extends StatelessWidget {
                 'No weekly schedule yet.\nUse “Schedule game” to set your usual game days.',
                 style: GoogleFonts.inter(
                   fontSize: 13,
-                  color: Colors.grey.shade600,
+                  color: onSurfaceColor,
                 ),
               ),
             )
@@ -539,7 +682,7 @@ class TeamDetailScreen extends StatelessWidget {
                           _formatScheduleSummary(team.recurringSchedule!),
                           style: GoogleFonts.inter(
                             fontSize: 13,
-                            color: Colors.grey.shade700,
+                            color: onSurfaceColor,
                           ),
                         ),
                       ],
@@ -561,16 +704,19 @@ class TeamDetailScreen extends StatelessWidget {
                 'No individual games scheduled yet.\nUse “Add game” below to create one.',
                 style: GoogleFonts.inter(
                   fontSize: 13,
-                  color: Colors.grey.shade600,
+                  color: onSurfaceColor,
                 ),
               ),
             )
           else
             Column(
               children: teamGames
-                  .map((game) => _GameListTile(
-                        game: game,
-                      ))
+                  .map(
+                    (game) => _GameListTile(
+                      game: game,
+                      isAdmin: isAdmin,
+                    ),
+                  )
                   .toList(),
             ),
           const SizedBox(height: 24),
@@ -585,6 +731,8 @@ class TeamDetailScreen extends StatelessWidget {
           _RosterSection(team: team),
         ],
       ),
+      ),
+      bottomNavigationBar: const AdBanner(),
       floatingActionButton: isAdmin
           ? FloatingActionButton.extended(
               heroTag: 'teamScheduleFab_$teamId',
@@ -625,6 +773,78 @@ class TeamDetailScreen extends StatelessWidget {
     return parts.join(', ');
   }
 
+  void _showTeamQrSheet(BuildContext context, Team team) {
+    final deepLink = 'rosterup://join-team?code=${team.teamCode}';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: false,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Text(
+                  'Join this team',
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Scan this QR code on another device to open RosterUp and join with team code ${team.teamCode}.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(fontSize: 13),
+                ),
+                const SizedBox(height: 16),
+                QrImageView(
+                  data: deepLink,
+                  version: QrVersions.auto,
+                  size: 200,
+                ),
+                const SizedBox(height: 16),
+                TextButton.icon(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: deepLink));
+                    ScaffoldMessenger.of(sheetContext).showSnackBar(
+                      const SnackBar(
+                        content: Text('Team join link copied'),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.link),
+                  label: Text(
+                    'Copy join link',
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _showCreateGameSheet(BuildContext context, String teamId) async {
     final locationController = TextEditingController();
     final maxPlayersController = TextEditingController();
@@ -634,7 +854,8 @@ class TeamDetailScreen extends StatelessWidget {
     TimeOfDay selectedTime = const TimeOfDay(hour: 19, minute: 0);
     bool isPublic = true;
     bool repeatWeekly = false;
-    final accessCodeController = TextEditingController();
+
+    bool isSaving = false;
 
     await showModalBottomSheet(
       context: context,
@@ -643,15 +864,8 @@ class TeamDetailScreen extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (sheetContext) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 16,
-            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
-          ),
-          child: StatefulBuilder(
-            builder: (context, setState) {
+        return StatefulBuilder(
+          builder: (context, setState) {
               Future<void> pickDate() async {
                 final now = DateTime.now();
                 final date = await showDatePicker(
@@ -716,208 +930,251 @@ class TeamDetailScreen extends StatelessWidget {
                 return '$hour:$minute $period';
               }
 
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
+              return SingleChildScrollView(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: 16,
+                    right: 16,
+                    top: 16,
+                    bottom:
+                        MediaQuery.of(sheetContext).viewInsets.bottom + 16,
                   ),
-                  Text(
-                    'Schedule single game',
-                    style: GoogleFonts.inter(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: pickDate,
-                          icon: const Icon(Icons.event),
-                          label: Text(formatDate(selectedDate)),
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: pickTime,
-                    icon: const Icon(Icons.access_time),
-                    label: Text(formatTime(selectedTime)),
-                  ),
-                  const SizedBox(height: 12),
-                  LocationPicker(
-                    controller: locationController,
-                    onLocationSelected: (lat, lng) {
-                      selectedLatitude = lat;
-                      selectedLongitude = lng;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: maxPlayersController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Player cap (optional)',
-                      hintText: 'e.g. 12',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(
-                      'Repeat weekly',
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                      Text(
+                        'Schedule single game',
+                        style: GoogleFonts.inter(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                    subtitle: Text(
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: pickDate,
+                              icon: const Icon(Icons.event),
+                              label: Text(formatDate(selectedDate)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: pickTime,
+                        icon: const Icon(Icons.access_time),
+                        label: Text(formatTime(selectedTime)),
+                      ),
+                      const SizedBox(height: 12),
+                      LocationPicker(
+                        controller: locationController,
+                        onLocationSelected: (lat, lng) {
+                          selectedLatitude = lat;
+                          selectedLongitude = lng;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: maxPlayersController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Player cap (optional)',
+                          hintText: 'e.g. 12',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(
+                          'Repeat weekly',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        subtitle: Text(
                       'Use this date and time every week.',
                       style: GoogleFonts.inter(
                         fontSize: 12,
-                        color: Colors.grey.shade600,
+                        color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                        value: repeatWeekly,
+                        onChanged: (value) {
+                          setState(() {
+                            repeatWeekly = value;
+                          });
+                        },
                       ),
-                    ),
-                    value: repeatWeekly,
-                    onChanged: (value) {
-                      setState(() {
-                        repeatWeekly = value;
-                      });
-                    },
-                  ),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(
-                      'Public game',
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    subtitle: Text(
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(
+                          'Public game',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        subtitle: Text(
                       isPublic
                           ? 'Anyone with the team can see this game.'
                           : 'Only people with the code can join.',
                       style: GoogleFonts.inter(
                         fontSize: 12,
-                        color: Colors.grey.shade600,
+                        color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                        value: isPublic,
+                        onChanged: (value) {
+                          setState(() {
+                            isPublic = value;
+                          });
+                        },
                       ),
-                    ),
-                    value: isPublic,
-                    onChanged: (value) {
-                      setState(() {
-                        isPublic = value;
-                      });
-                    },
-                  ),
-                  if (!isPublic) ...[
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: accessCodeController,
-                      textCapitalization: TextCapitalization.characters,
-                      decoration: const InputDecoration(
-                        labelText: 'Access code',
-                        hintText: 'e.g. ABC123',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: () async {
-                        if (selectedDate == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Please pick a date'),
-                            ),
-                          );
-                          return;
-                        }
-
-                        final dateTime = DateTime(
-                          selectedDate!.year,
-                          selectedDate!.month,
-                          selectedDate!.day,
-                          selectedTime.hour,
-                          selectedTime.minute,
-                        );
-
-                        if (!isPublic &&
-                            accessCodeController.text.trim().isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content:
-                                  Text('Please enter an access code for private games'),
-                            ),
-                          );
-                          return;
-                        }
-
-                        int? maxPlayersIn;
-                        final capText = maxPlayersController.text.trim();
-                        if (capText.isNotEmpty) {
-                          final parsed = int.tryParse(capText);
-                          if (parsed != null && parsed > 0) {
-                            maxPlayersIn = parsed;
-                          }
-                        }
-
-                        try {
-                          await context.read<GameProvider>().createGame(
-                                teamId: teamId,
-                                dateTime: dateTime,
-                                location: locationController.text.trim(),
-                                latitude: selectedLatitude,
-                                longitude: selectedLongitude,
-                                maxPlayersIn: maxPlayersIn,
-                                isRecurring: repeatWeekly,
-                                isPublic: isPublic,
-                                accessCode: isPublic
-                                    ? null
-                                    : accessCodeController.text.trim(),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: isSaving
+                              ? null
+                              : () async {
+                            if (isSaving) return;
+                            setState(() {
+                              isSaving = true;
+                            });
+                            if (selectedDate == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Please pick a date'),
+                                ),
                               );
-                        } catch (_) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content:
-                                    Text('Could not create game. Please try again.'),
-                              ),
-                            );
-                          }
-                          return;
-                        }
+                              setState(() {
+                                isSaving = false;
+                              });
+                              return;
+                            }
 
-                        Navigator.of(sheetContext).pop();
-                      },
-                      child: Text(
-                        'Add game',
-                        style: GoogleFonts.inter(
-                          fontWeight: FontWeight.w600,
+                            final now = DateTime.now();
+                            final dateTime = DateTime(
+                              selectedDate!.year,
+                              selectedDate!.month,
+                              selectedDate!.day,
+                              selectedTime.hour,
+                              selectedTime.minute,
+                            );
+                            if (!dateTime.isAfter(now)) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Pick a time in the future.',
+                                  ),
+                                ),
+                              );
+                              setState(() {
+                                isSaving = false;
+                              });
+                              return;
+                            }
+
+                            // Prevent duplicate games at the same date/time for this team.
+                            final existingForTeam = context
+                                .read<GameProvider>()
+                                .getGamesForTeam(teamId);
+                            final alreadyExists = existingForTeam.any(
+                              (g) => g.dateTime.isAtSameMomentAs(dateTime),
+                            );
+                            if (alreadyExists) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'A game at this date and time already exists for this team.',
+                                  ),
+                                ),
+                              );
+                              setState(() {
+                                isSaving = false;
+                              });
+                              return;
+                            }
+
+                            int? maxPlayersIn;
+                            final capText =
+                                maxPlayersController.text.trim();
+                            if (capText.isNotEmpty) {
+                              final parsed = int.tryParse(capText);
+                              if (parsed != null && parsed > 0) {
+                                maxPlayersIn = parsed;
+                              }
+                            }
+
+                            try {
+                              await context.read<GameProvider>().createGame(
+                                    teamId: teamId,
+                                    dateTime: dateTime,
+                                    location:
+                                        locationController.text.trim(),
+                                    latitude: selectedLatitude,
+                                    longitude: selectedLongitude,
+                                    maxPlayersIn: maxPlayersIn,
+                                    isRecurring: repeatWeekly,
+                                    isPublic: isPublic,
+                                    accessCode: null,
+                                  );
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Game scheduled'),
+                                  ),
+                                );
+                              }
+                            } catch (_) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context)
+                                    .showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Could not create game. Please try again.',
+                                    ),
+                                  ),
+                                );
+                              }
+                              setState(() {
+                                isSaving = false;
+                              });
+                              return;
+                            }
+
+                            Navigator.of(sheetContext).pop();
+                          },
+                          child: Text(
+                            'Add game',
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               );
             },
-          ),
-        );
+          );
       },
     );
   }
@@ -933,6 +1190,7 @@ class _RosterSection extends StatelessWidget {
     final userProvider = context.watch<UserProvider>();
     final auth = context.watch<AuthProvider>();
     final colorScheme = Theme.of(context).colorScheme;
+    final onSurfaceColor = colorScheme.onSurface;
 
     final members = team.memberIds;
 
@@ -953,7 +1211,7 @@ class _RosterSection extends StatelessWidget {
               'No roster yet. Share your team code so teammates can join.',
               style: GoogleFonts.inter(
                 fontSize: 13,
-                color: Colors.grey.shade600,
+                color: onSurfaceColor,
               ),
             )
           else
@@ -1012,7 +1270,7 @@ class _RosterSection extends StatelessWidget {
                               'Admin',
                               style: GoogleFonts.inter(
                                 fontSize: 11,
-                                color: Colors.grey.shade600,
+                                color: onSurfaceColor,
                               ),
                             ),
                           if (!isAdmin && isMuted)
@@ -1226,7 +1484,9 @@ class _RosterSection extends StatelessWidget {
 class _GameListTile extends StatelessWidget {
   final Game game;
 
-  const _GameListTile({required this.game});
+  final bool isAdmin;
+
+  const _GameListTile({required this.game, required this.isAdmin});
 
   @override
   Widget build(BuildContext context) {
@@ -1238,6 +1498,7 @@ class _GameListTile extends StatelessWidget {
     }
 
     final colorScheme = Theme.of(context).colorScheme;
+    final onSurfaceColor = colorScheme.onSurface;
     final date = game.dateTime;
     final weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     final weekday = weekdayNames[date.weekday - 1];
@@ -1254,6 +1515,7 @@ class _GameListTile extends StatelessWidget {
     final outCount = game.getDeclinedCount();
     final maxPlayers = game.maxPlayersIn;
     final isFull = maxPlayers != null && inCount >= maxPlayers;
+    final isPast = date.isBefore(DateTime.now());
 
     return Card(
       elevation: 0,
@@ -1288,18 +1550,86 @@ class _GameListTile extends StatelessWidget {
                 '$month $day',
                 style: GoogleFonts.inter(
                   fontSize: 11,
-                  color: Colors.grey.shade700,
+                  color: onSurfaceColor,
                 ),
               ),
             ],
           ),
         ),
-        title: Text(
-          '$hour:$minute $period',
-          style: GoogleFonts.inter(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              '$hour:$minute $period',
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (isAdmin)
+              PopupMenuButton<String>(
+                icon: const Icon(
+                  Icons.more_vert,
+                  size: 20,
+                ),
+                onSelected: (value) async {
+                  if (value == 'edit') {
+                    await _showEditGameSheet(context, game);
+                  } else if (value == 'delete') {
+                    final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Delete game'),
+                            content: const Text(
+                              'Are you sure you want to delete this game? '
+                              'This action is permanent and cannot be undone.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(ctx).pop(false),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(ctx).pop(true),
+                                child: const Text('Delete'),
+                              ),
+                            ],
+                          ),
+                        ) ??
+                        false;
+
+                    if (!confirmed) return;
+
+                    final success = await context
+                        .read<GameProvider>()
+                        .deleteGame(game.id);
+
+                    if (!context.mounted) return;
+
+                    if (!success) {
+                      final error =
+                          context.read<GameProvider>().error ??
+                              'Could not delete game. Please try again.';
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(error)),
+                      );
+                    }
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Text('Edit game'),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Text('Delete game'),
+                  ),
+                ],
+              ),
+          ],
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1308,7 +1638,7 @@ class _GameListTile extends StatelessWidget {
               game.location.isEmpty ? 'No location set' : game.location,
               style: GoogleFonts.inter(
                 fontSize: 13,
-                color: Colors.grey.shade600,
+                color: onSurfaceColor,
               ),
             ),
             const SizedBox(height: 4),
@@ -1324,7 +1654,7 @@ class _GameListTile extends StatelessWidget {
                   game.isPublic ? 'Public' : 'Code required',
                   style: GoogleFonts.inter(
                     fontSize: 11,
-                    color: Colors.grey.shade600,
+                    color: onSurfaceColor,
                   ),
                 ),
               ],
@@ -1335,7 +1665,7 @@ class _GameListTile extends StatelessWidget {
                 'In $inCount / $maxPlayers',
                 style: GoogleFonts.inter(
                   fontSize: 12,
-                  color: isFull ? Colors.red : Colors.grey.shade700,
+                  color: isFull ? Colors.red : onSurfaceColor,
                 ),
               ),
             ],
@@ -1357,6 +1687,15 @@ class _GameListTile extends StatelessWidget {
                       color: Colors.green.shade800,
                     ),
                     onSelected: (_) {
+                      if (isPast) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content:
+                                Text('This game has already started.'),
+                          ),
+                        );
+                        return;
+                      }
                       final alreadyIn =
                           currentStatus == ConfirmationStatus.confirmed;
                       if (maxPlayers != null &&
@@ -1391,6 +1730,15 @@ class _GameListTile extends StatelessWidget {
                       color: Colors.orange.shade800,
                     ),
                     onSelected: (_) {
+                      if (isPast) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content:
+                                Text('This game has already started.'),
+                          ),
+                        );
+                        return;
+                      }
                       context.read<GameProvider>().confirmAttendance(
                             gameId: game.id,
                             userId: currentUserId,
@@ -1411,6 +1759,15 @@ class _GameListTile extends StatelessWidget {
                       color: Colors.red.shade800,
                     ),
                     onSelected: (_) {
+                      if (isPast) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content:
+                                Text('This game has already started.'),
+                          ),
+                        );
+                        return;
+                      }
                       context.read<GameProvider>().confirmAttendance(
                             gameId: game.id,
                             userId: currentUserId,
@@ -1449,5 +1806,233 @@ class _GameListTile extends StatelessWidget {
       'Dec',
     ];
     return months[month - 1];
+  }
+
+  Future<void> _showEditGameSheet(BuildContext context, Game game) async {
+    final locationController =
+        TextEditingController(text: game.location);
+    final maxPlayersController = TextEditingController(
+      text: game.maxPlayersIn?.toString() ?? '',
+    );
+    DateTime selectedDate = game.dateTime;
+    TimeOfDay selectedTime =
+        TimeOfDay(hour: game.dateTime.hour, minute: game.dateTime.minute);
+
+    Future<void> pickDate() async {
+      final now = DateTime.now();
+      final date = await showDatePicker(
+        context: context,
+        initialDate: selectedDate.isBefore(now) ? now : selectedDate,
+        firstDate: now,
+        lastDate: DateTime(now.year + 1),
+      );
+      if (date != null) {
+        selectedDate = date;
+      }
+    }
+
+    Future<void> pickTime() async {
+      final time = await showTimePicker(
+        context: context,
+        initialTime: selectedTime,
+      );
+      if (time != null) {
+        selectedTime = time;
+      }
+    }
+
+    String formatDate(DateTime date) {
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
+      final weekdayNames = [
+        'Mon',
+        'Tue',
+        'Wed',
+        'Thu',
+        'Fri',
+        'Sat',
+        'Sun',
+      ];
+      final weekday = weekdayNames[date.weekday - 1];
+      final month = months[date.month - 1];
+      return '$weekday, $month ${date.day}, ${date.year}';
+    }
+
+    String formatTime(TimeOfDay time) {
+      final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+      final minute = time.minute.toString().padLeft(2, '0');
+      final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+      return '$hour:$minute $period';
+    }
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 16,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+          ),
+          child: StatefulBuilder(
+            builder: (context, setState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    'Edit game',
+                    style: GoogleFonts.inter(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            await pickDate();
+                            setState(() {});
+                          },
+                          icon: const Icon(Icons.event),
+                          label: Text(formatDate(selectedDate)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      await pickTime();
+                      setState(() {});
+                    },
+                    icon: const Icon(Icons.access_time),
+                    label: Text(formatTime(selectedTime)),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: locationController,
+                    decoration: const InputDecoration(
+                      labelText: 'Location',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: maxPlayersController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Player cap (optional)',
+                      hintText: 'e.g. 12',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () async {
+                        final now = DateTime.now();
+                        final dateTime = DateTime(
+                          selectedDate.year,
+                          selectedDate.month,
+                          selectedDate.day,
+                          selectedTime.hour,
+                          selectedTime.minute,
+                        );
+                        if (!dateTime.isAfter(now)) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content:
+                                  Text('Pick a time in the future.'),
+                            ),
+                          );
+                          return;
+                        }
+
+                        int? maxPlayersIn;
+                        final capText =
+                            maxPlayersController.text.trim();
+                        if (capText.isNotEmpty) {
+                          final parsed = int.tryParse(capText);
+                          if (parsed != null && parsed > 0) {
+                            maxPlayersIn = parsed;
+                          }
+                        }
+
+                        final success = await context
+                            .read<GameProvider>()
+                            .updateGameDetails(
+                              gameId: game.id,
+                              dateTime: dateTime,
+                              location: locationController.text.trim(),
+                              maxPlayersIn: maxPlayersIn,
+                            );
+
+                        if (!context.mounted) return;
+
+                        if (!success) {
+                          final error =
+                              context.read<GameProvider>().error ??
+                                  'Could not update game. Please try again.';
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(error)),
+                          );
+                          return;
+                        }
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Game updated'),
+                          ),
+                        );
+
+                        Navigator.of(sheetContext).pop();
+                      },
+                      child: Text(
+                        'Save changes',
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
   }
 }
