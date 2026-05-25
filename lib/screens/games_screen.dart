@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../constants/app_constants.dart';
 import '../models/game.dart';
+import '../utils/app_colors.dart';
+import '../utils/date_format_utils.dart';
 import '../providers/auth_provider.dart';
 import '../providers/game_provider.dart';
 import '../providers/team_provider.dart';
@@ -30,6 +34,17 @@ class _GamesScreenState extends State<GamesScreen> {
   String _searchQuery = '';
   GamesFilter _filter = GamesFilter.all;
 
+  Future<void> _refresh() async {
+    final auth = context.read<AuthProvider>();
+    final user = auth.user;
+    if (user == null) return;
+    final teamProvider = context.read<TeamProvider>();
+    final gameProvider = context.read<GameProvider>();
+    await teamProvider.loadUserTeams(user.uid);
+    final teamIds = teamProvider.teams.map((t) => t.id).toList();
+    await gameProvider.loadUpcomingGames(teamIds);
+  }
+
   @override
   Widget build(BuildContext context) {
     final gameProvider = context.watch<GameProvider>();
@@ -44,7 +59,14 @@ class _GamesScreenState extends State<GamesScreen> {
       allConfirmedIds
           .addAll(game.getPlayersWithStatus(ConfirmationStatus.confirmed));
     }
-    userProvider.loadUsersByIds(allConfirmedIds.toList());
+    final uncachedIds = allConfirmedIds
+        .where((id) => userProvider.getUserById(id) == null)
+        .toList();
+    if (uncachedIds.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.read<UserProvider>().loadUsersByIds(uncachedIds);
+      });
+    }
 
     final auth = context.watch<AuthProvider>();
     final currentUserId = auth.user?.uid;
@@ -88,14 +110,6 @@ class _GamesScreenState extends State<GamesScreen> {
             ('$teamName ${game.location}').toLowerCase();
         return haystack.contains(_searchQuery);
       }).toList();
-    }
-
-    Future<void> _refresh() async {
-      final user = auth.user;
-      if (user == null) return;
-      await teamProvider.loadUserTeams(user.uid);
-      final teamIds = teamProvider.teams.map((t) => t.id).toList();
-      await gameProvider.loadUpcomingGames(teamIds);
     }
 
     return SafeArea(
@@ -271,39 +285,13 @@ class _GamesScreenState extends State<GamesScreen> {
                                 : 'Unknown team';
 
                             final date = game.dateTime;
-                            final weekdayNames = [
-                              'Mon',
-                              'Tue',
-                              'Wed',
-                              'Thu',
-                              'Fri',
-                              'Sat',
-                              'Sun',
-                            ];
-                            const months = [
-                              'Jan',
-                              'Feb',
-                              'Mar',
-                              'Apr',
-                              'May',
-                              'Jun',
-                              'Jul',
-                              'Aug',
-                              'Sep',
-                              'Oct',
-                              'Nov',
-                              'Dec',
-                            ];
-
-                            final weekday = weekdayNames[date.weekday - 1];
-                            final month = months[date.month - 1];
-                            final day = date.day;
-                            final rawHour = date.hour;
-                            final hour =
-                                rawHour == 0 || rawHour == 12 ? 12 : rawHour % 12;
-                            final minute =
-                                date.minute.toString().padLeft(2, '0');
-                            final period = date.hour < 12 ? 'AM' : 'PM';
+                            final f = FormattedDate(date);
+                            final weekday = f.weekday;
+                            final month = f.month;
+                            final day = f.day;
+                            final hour = f.hour;
+                            final minute = f.minute;
+                            final period = f.period;
 
                             final currentUserId = auth.user?.uid;
                             final currentStatus = currentUserId != null
@@ -346,7 +334,7 @@ class _GamesScreenState extends State<GamesScreen> {
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                   side: BorderSide(
-                                    color: Colors.grey.shade200,
+                                    color: Theme.of(context).colorScheme.outlineVariant,
                                   ),
                                 ),
                                 child: Padding(
@@ -410,7 +398,7 @@ class _GamesScreenState extends State<GamesScreen> {
                                                 ? Icons.public
                                                 : Icons.lock,
                                             size: 14,
-                                            color: Colors.grey.shade600,
+                                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                                           ),
                                           const SizedBox(width: 4),
                                           Text(
@@ -463,8 +451,8 @@ class _GamesScreenState extends State<GamesScreen> {
                                                         decoration:
                                                             BoxDecoration(
                                                           color: Colors.red
-                                                              .withOpacity(
-                                                                  0.08),
+                                                              .withValues(
+                                                                  alpha: 0.08),
                                                           borderRadius:
                                                               BorderRadius
                                                                   .circular(8),
@@ -484,16 +472,61 @@ class _GamesScreenState extends State<GamesScreen> {
                                                   ],
                                                 ),
                                                 if (!isFull && spotsLeft <= 3)
-                                                  Text(
-                                                    spotsLeft == 1
-                                                        ? 'Only 1 spot left'
-                                                        : 'Only $spotsLeft spots left',
-                                                    style: GoogleFonts.inter(
-                                                      fontSize: 11,
-                                                      color: Colors.orange,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                    ),
+                                                  Row(
+                                                    children: [
+                                                      Text(
+                                                        spotsLeft == 1
+                                                            ? 'Only 1 spot left'
+                                                            : 'Only $spotsLeft spots left',
+                                                        style: GoogleFonts.inter(
+                                                          fontSize: 11,
+                                                          color: Colors.orange,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 6),
+                                                      GestureDetector(
+                                                        onTap: () {
+                                                          final team = matchingTeams.isNotEmpty ? matchingTeams.first : null;
+                                                          final teamCode = team?.teamCode;
+                                                          final accessCode = game.accessCode?.trim();
+                                                          final hasAccessCode = !game.isPublic && (accessCode != null && accessCode.isNotEmpty);
+                                                          final buffer = StringBuffer()
+                                                            ..writeln('Join our game for $teamName on RosterUp!')
+                                                            ..writeln()
+                                                            ..writeln('Date: $weekday, $month $day at $hour:$minute $period')
+                                                            ..writeln('Location: ${game.location.isEmpty ? 'TBD' : game.location}');
+                                                          if (teamCode != null && teamCode.isNotEmpty) {
+                                                            buffer.writeln('Team code: $teamCode');
+                                                          }
+                                                          if (hasAccessCode) {
+                                                            buffer.writeln('Game access code: $accessCode');
+                                                          }
+                                                          buffer..writeln()..writeln('Download RosterUp: ${AppConstants.downloadUrl}');
+                                                          Share.share(buffer.toString(), subject: 'Join our game on RosterUp');
+                                                        },
+                                                        child: Row(
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [
+                                                            Icon(
+                                                              Icons.person_add,
+                                                              size: 12,
+                                                              color: Theme.of(context).colorScheme.primary,
+                                                            ),
+                                                            const SizedBox(width: 2),
+                                                            Text(
+                                                              'Invite',
+                                                              style: GoogleFonts.inter(
+                                                                fontSize: 11,
+                                                                color: Theme.of(context).colorScheme.primary,
+                                                                fontWeight: FontWeight.w600,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ],
                                                   )
                                                 else if (!isFull &&
                                                     occupancyPercent >= 70)
@@ -532,10 +565,10 @@ class _GamesScreenState extends State<GamesScreen> {
                                               label: Text("I'm in ($inCount)"),
                                               selected: currentStatus ==
                                                   ConfirmationStatus.confirmed,
-                                              selectedColor: Colors.green
-                                                  .withOpacity(0.18),
-                                              backgroundColor: Colors.green
-                                                  .withOpacity(0.06),
+                                              selectedColor: AppColors.confirmed
+                                                  .withValues(alpha: 0.18),
+                                              backgroundColor: AppColors.confirmed
+                                                  .withValues(alpha: 0.06),
                                               labelStyle: GoogleFonts.inter(
                                                 fontSize: 13,
                                                 fontWeight:
@@ -544,7 +577,7 @@ class _GamesScreenState extends State<GamesScreen> {
                                                                 .confirmed
                                                         ? FontWeight.w600
                                                         : FontWeight.w500,
-                                                color: Colors.green.shade800,
+                                                color: AppColors.confirmed,
                                               ),
                                               onSelected: (_) {
                                                 final alreadyIn =
@@ -582,9 +615,9 @@ class _GamesScreenState extends State<GamesScreen> {
                                               selected: currentStatus ==
                                                   ConfirmationStatus.maybe,
                                               selectedColor: Colors
-                                                  .amber.withOpacity(0.18),
+                                                  .amber.withValues(alpha: 0.18),
                                               backgroundColor: Colors
-                                                  .amber.withOpacity(0.06),
+                                                  .amber.withValues(alpha: 0.06),
                                               labelStyle: GoogleFonts.inter(
                                                 fontSize: 13,
                                                 fontWeight:
@@ -593,7 +626,7 @@ class _GamesScreenState extends State<GamesScreen> {
                                                                 .maybe
                                                         ? FontWeight.w600
                                                         : FontWeight.w500,
-                                                color: Colors.orange.shade800,
+                                                color: AppColors.maybe,
                                               ),
                                               onSelected: (_) {
                                                 context
@@ -614,9 +647,9 @@ class _GamesScreenState extends State<GamesScreen> {
                                               selected: currentStatus ==
                                                   ConfirmationStatus.declined,
                                               selectedColor:
-                                                  Colors.red.withOpacity(0.18),
+                                                  AppColors.declined.withValues(alpha: 0.18),
                                               backgroundColor:
-                                                  Colors.red.withOpacity(0.06),
+                                                  AppColors.declined.withValues(alpha: 0.06),
                                               labelStyle: GoogleFonts.inter(
                                                 fontSize: 13,
                                                 fontWeight:
@@ -625,7 +658,7 @@ class _GamesScreenState extends State<GamesScreen> {
                                                                 .declined
                                                         ? FontWeight.w600
                                                         : FontWeight.w500,
-                                                color: Colors.red.shade800,
+                                                color: AppColors.declined,
                                               ),
                                               onSelected: (_) {
                                                 context

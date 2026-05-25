@@ -4,12 +4,15 @@ import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
+import '../services/deep_link_service.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
 import 'profile_setup_screen.dart';
 
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+  final String? initialTeamCode;
+
+  const SplashScreen({super.key, this.initialTeamCode});
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -53,8 +56,13 @@ class _SplashScreenState extends State<SplashScreen> {
         final hasProfile = userProvider.currentUser != null;
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (_) =>
-                hasProfile ? const HomeScreen() : const ProfileSetupScreen(),
+            builder: (_) => hasProfile
+                ? HomeScreen(
+                    initialTabIndex:
+                        widget.initialTeamCode != null ? 1 : 0,
+                    initialJoinTeamCode: widget.initialTeamCode,
+                  )
+                : const ProfileSetupScreen(),
           ),
         );
       } else {

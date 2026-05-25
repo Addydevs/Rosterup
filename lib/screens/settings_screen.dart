@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
+import '../constants/app_constants.dart';
 import '../services/update_service.dart';
 import '../widgets/ad_banner.dart';
 import 'login_screen.dart';
@@ -30,7 +31,7 @@ class SettingsScreen extends StatelessWidget {
     final teamAnnouncementsEnabled =
         (prefs['notificationsTeamAnnouncements'] as bool?) ?? true;
     var theme = (prefs['theme'] as String?) ?? 'light';
-    if (theme != 'light' && theme != 'dark') {
+    if (theme != 'light' && theme != 'dark' && theme != 'system') {
       theme = 'light';
     }
     final onSurfaceColor = Theme.of(context).colorScheme.onSurface;
@@ -161,6 +162,7 @@ class SettingsScreen extends StatelessWidget {
               items: const [
                 DropdownMenuItem(value: 'light', child: Text('Light')),
                 DropdownMenuItem(value: 'dark', child: Text('Dark')),
+                DropdownMenuItem(value: 'system', child: Text('System')),
               ],
               onChanged: (value) {
                 if (value != null) {
@@ -236,8 +238,8 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: () {
-                const message =
-                    'Check out RosterUp – coordinate pickup games with your team. Search “RosterUp” in the app store to download.';
+                final message =
+                    'Check out RosterUp – coordinate pickup games with your team.\n\nDownload: ${AppConstants.downloadUrl}';
                 Share.share(message, subject: 'Try RosterUp');
               },
               icon: const Icon(Icons.ios_share),

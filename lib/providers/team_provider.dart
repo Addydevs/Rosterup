@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
@@ -139,6 +141,7 @@ class TeamProvider extends ChangeNotifier {
       final teamQuery = await _firestore
           .collection('teams')
           .where('teamCode', isEqualTo: teamCode.toUpperCase())
+          .limit(1)
           .get();
 
       if (teamQuery.docs.isEmpty) {
@@ -146,35 +149,42 @@ class TeamProvider extends ChangeNotifier {
         return false;
       }
 
-      final teamDoc = teamQuery.docs.first;
-      final team = Team.fromFirestore(teamDoc);
+      final teamRef = teamQuery.docs.first.reference;
+      Team? updatedTeam;
 
-      if (team.memberIds.contains(userId)) {
-        _error = 'You are already a member of this team';
-        return false;
-      }
-
-      // Add user to team
-      await _firestore.collection('teams').doc(team.id).update({
-        'memberIds': FieldValue.arrayUnion([userId]),
-        'updatedAt': FieldValue.serverTimestamp(),
+      await _firestore.runTransaction((txn) async {
+        final snap = await txn.get(teamRef);
+        final members =
+            List<String>.from(snap.data()?['memberIds'] ?? []);
+        if (members.contains(userId)) {
+          throw Exception('already_member');
+        }
+        txn.update(teamRef, {
+          'memberIds': FieldValue.arrayUnion([userId]),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        final freshTeam = Team.fromFirestore(snap);
+        updatedTeam = freshTeam.copyWith(
+          memberIds: [...freshTeam.memberIds, userId],
+        );
       });
 
-      // Update local state
-      final updatedTeam = team.copyWith(
-        memberIds: [...team.memberIds, userId],
-      );
-      
-      final index = _teams.indexWhere((t) => t.id == team.id);
-      if (index != -1) {
-        _teams[index] = updatedTeam;
-      } else {
-        _teams.add(updatedTeam);
+      if (updatedTeam != null) {
+        final index = _teams.indexWhere((t) => t.id == updatedTeam!.id);
+        if (index != -1) {
+          _teams[index] = updatedTeam!;
+        } else {
+          _teams.add(updatedTeam!);
+        }
       }
 
       return true;
     } catch (e) {
-      _error = e.toString();
+      if (e.toString().contains('already_member')) {
+        _error = 'You are already a member of this team';
+      } else {
+        _error = e.toString();
+      }
       return false;
     } finally {
       _isLoading = false;
@@ -396,11 +406,13 @@ class TeamProvider extends ChangeNotifier {
     }
   }
 
+  static final _rng = Random.secure();
+
   String _generateTeamCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Avoid confusing chars
     String code = '';
     for (int i = 0; i < 6; i++) {
-      code += chars[(DateTime.now().millisecondsSinceEpoch + i) % chars.length];
+      code += chars[_rng.nextInt(chars.length)];
     }
     return code;
   }

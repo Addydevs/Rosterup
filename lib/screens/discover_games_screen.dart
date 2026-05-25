@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../models/game.dart';
 import '../models/team.dart';
+import '../utils/date_format_utils.dart';
 import '../providers/game_provider.dart';
 import '../providers/team_provider.dart';
 import '../providers/auth_provider.dart';
@@ -28,6 +29,7 @@ class _DiscoverGamesScreenState extends State<DiscoverGamesScreen> {
   double _radiusKm = 25;
   Position? _position;
   bool _requestedOnce = false;
+  final Set<String> _cachedUserIds = {};
 
   @override
   void initState() {
@@ -90,6 +92,7 @@ class _DiscoverGamesScreenState extends State<DiscoverGamesScreen> {
   void _showJoinWithAccessCode() {
     final teamCodeController = TextEditingController();
     final accessCodeController = TextEditingController();
+    bool isJoining = false;
 
     showModalBottomSheet(
       context: context,
@@ -99,9 +102,7 @@ class _DiscoverGamesScreenState extends State<DiscoverGamesScreen> {
       ),
       builder: (sheetContext) {
         return StatefulBuilder(
-          builder: (context, setState) {
-            final onSurfaceColor =
-                Theme.of(context).colorScheme.onSurface;
+          builder: (context, setSheetState) {
             return SingleChildScrollView(
               child: Padding(
                 padding: EdgeInsets.only(
@@ -121,7 +122,7 @@ class _DiscoverGamesScreenState extends State<DiscoverGamesScreen> {
                         height: 4,
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade300,
+                          color: Theme.of(context).colorScheme.outline,
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -157,94 +158,128 @@ class _DiscoverGamesScreenState extends State<DiscoverGamesScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(
-                        onPressed: () async {
-                          final teamCode = teamCodeController.text.trim();
-                          final accessCode = accessCodeController.text.trim();
+                        onPressed: isJoining
+                            ? null
+                            : () async {
+                                final teamCode =
+                                    teamCodeController.text.trim();
+                                final accessCode =
+                                    accessCodeController.text.trim();
 
-                          if (teamCode.isEmpty || accessCode.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Enter both team code and game access code',
+                                if (teamCode.isEmpty ||
+                                    accessCode.isEmpty) {
+                                  ScaffoldMessenger.of(context)
+                                      .showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Enter both team code and game access code',
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                final auth = context.read<AuthProvider>();
+                                final user = auth.user;
+                                if (user == null) {
+                                  ScaffoldMessenger.of(context)
+                                      .showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'You must be logged in to join a game',
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                setSheetState(() => isJoining = true);
+
+                                final teamProvider =
+                                    context.read<TeamProvider>();
+                                final team = await teamProvider
+                                    .findTeamByCode(teamCode);
+                                if (!mounted) {
+                                  setSheetState(() => isJoining = false);
+                                  return;
+                                }
+                                if (team == null) {
+                                  setSheetState(() => isJoining = false);
+                                  ScaffoldMessenger.of(context)
+                                      .showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                          'Team not found for that code'),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                if (!team.memberIds.contains(user.uid)) {
+                                  final joined = await teamProvider
+                                      .joinTeam(teamCode, user.uid);
+                                  if (!mounted) {
+                                    setSheetState(() => isJoining = false);
+                                    return;
+                                  }
+                                  if (!joined) {
+                                    setSheetState(() => isJoining = false);
+                                    final msg = teamProvider.error ??
+                                        'Could not join team for this game.';
+                                    ScaffoldMessenger.of(context)
+                                        .showSnackBar(
+                                      SnackBar(content: Text(msg)),
+                                    );
+                                    return;
+                                  }
+                                }
+
+                                final gameProvider =
+                                    context.read<GameProvider>();
+                                final game = await gameProvider
+                                    .findFirstGameByAccessCode(
+                                  teamId: team.id,
+                                  accessCode: accessCode,
+                                );
+                                if (!mounted) {
+                                  setSheetState(() => isJoining = false);
+                                  return;
+                                }
+                                if (game == null) {
+                                  setSheetState(() => isJoining = false);
+                                  ScaffoldMessenger.of(context)
+                                      .showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'No game found with that access code',
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                setSheetState(() => isJoining = false);
+                                Navigator.of(sheetContext).pop();
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        GameDetailScreen(gameId: game.id),
+                                  ),
+                                );
+                              },
+                        child: isJoining
+                            ? const SizedBox(
+                                height: 16,
+                                width: 16,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2),
+                              )
+                            : Text(
+                                'Find game',
+                                style: GoogleFonts.inter(
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                            );
-                            return;
-                          }
-
-                          final auth = context.read<AuthProvider>();
-                          final user = auth.user;
-                          if (user == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'You must be logged in to join a game',
-                                ),
-                              ),
-                            );
-                            return;
-                          }
-
-                          final teamProvider = context.read<TeamProvider>();
-                          Team? team =
-                              await teamProvider.findTeamByCode(teamCode);
-                          if (team == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Team not found for that code'),
-                              ),
-                            );
-                            return;
-                          }
-
-                          if (!team.memberIds.contains(user.uid)) {
-                            final joined = await teamProvider.joinTeam(
-                              teamCode,
-                              user.uid,
-                            );
-                            if (!joined) {
-                              final msg = teamProvider.error ??
-                                  'Could not join team for this game.';
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(msg)),
-                              );
-                              return;
-                            }
-                          }
-
-                          final gameProvider = context.read<GameProvider>();
-                          final game =
-                              await gameProvider.findFirstGameByAccessCode(
-                            teamId: team.id,
-                            accessCode: accessCode,
-                          );
-
-                          if (game == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'No game found with that access code',
-                                ),
-                              ),
-                            );
-                            return;
-                          }
-
-                          if (!mounted) return;
-                          Navigator.of(sheetContext).pop();
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  GameDetailScreen(gameId: game.id),
-                            ),
-                          );
-                        },
-                        child: Text(
-                          'Find game',
-                          style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
                       ),
                     ),
                   ],
@@ -291,7 +326,15 @@ class _DiscoverGamesScreenState extends State<DiscoverGamesScreen> {
       allConfirmedIds
           .addAll(game.getPlayersWithStatus(ConfirmationStatus.confirmed));
     }
-    userProvider.loadUsersByIds(allConfirmedIds.toList());
+    final newIds = allConfirmedIds
+        .difference(_cachedUserIds)
+        .toList();
+    if (newIds.isNotEmpty) {
+      _cachedUserIds.addAll(newIds);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) userProvider.loadUsersByIds(newIds);
+      });
+    }
 
     return SafeArea(
       child: Scaffold(
@@ -419,38 +462,13 @@ class _DiscoverGamesScreenState extends State<DiscoverGamesScreen> {
                           final teamName = team?.name ?? 'Unknown team';
 
                           final date = game.dateTime;
-                          final weekdayNames = [
-                            'Mon',
-                            'Tue',
-                            'Wed',
-                            'Thu',
-                            'Fri',
-                            'Sat',
-                            'Sun',
-                          ];
-                          const months = [
-                            'Jan',
-                            'Feb',
-                            'Mar',
-                            'Apr',
-                            'May',
-                            'Jun',
-                            'Jul',
-                            'Aug',
-                            'Sep',
-                            'Oct',
-                            'Nov',
-                            'Dec',
-                          ];
-                          final weekday = weekdayNames[date.weekday - 1];
-                          final month = months[date.month - 1];
-                          final day = date.day;
-                          final rawHour = date.hour;
-                          final hour =
-                              rawHour == 0 || rawHour == 12 ? 12 : rawHour % 12;
-                          final minute =
-                              date.minute.toString().padLeft(2, '0');
-                          final period = date.hour < 12 ? 'AM' : 'PM';
+                          final f = FormattedDate(date);
+                          final weekday = f.weekday;
+                          final month = f.month;
+                          final day = f.day;
+                          final hour = f.hour;
+                          final minute = f.minute;
+                          final period = f.period;
 
                           final distance = _distanceKm(game);
                           final inCount = game.getConfirmedCount();
@@ -461,7 +479,7 @@ class _DiscoverGamesScreenState extends State<DiscoverGamesScreen> {
                             margin: const EdgeInsets.only(bottom: 12),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
-                              side: BorderSide(color: Colors.grey.shade200),
+                              side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
                             ),
                             child: InkWell(
                               borderRadius: BorderRadius.circular(16),

@@ -57,7 +57,7 @@ class _SignupScreenState extends State<SignupScreen> {
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not create account.')), 
+        SnackBar(content: Text(auth.lastError ?? 'Could not create account.')),
       );
     }
   }

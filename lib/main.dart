@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'firebase_options.dart';
+import 'services/deep_link_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/team_provider.dart';
 import 'providers/game_provider.dart';
@@ -50,13 +51,28 @@ Future<void> main() async {
     debugPrint('❌ Mobile Ads initialization error: $e');
   }
 
-  runApp(RosterUpApp(firebaseInitError: firebaseInitError));
+  // Initialize deep link handling (cold-start link).
+  String? initialTeamCode;
+  try {
+    initialTeamCode = await DeepLinkService.instance.init();
+    if (initialTeamCode != null) {
+      debugPrint('🔗 Deep link team code: $initialTeamCode');
+    }
+  } catch (e) {
+    debugPrint('⚠️ Deep link init error: $e');
+  }
+
+  runApp(RosterUpApp(
+    firebaseInitError: firebaseInitError,
+    initialTeamCode: initialTeamCode,
+  ));
 }
 
 class RosterUpApp extends StatelessWidget {
-  const RosterUpApp({super.key, this.firebaseInitError});
+  const RosterUpApp({super.key, this.firebaseInitError, this.initialTeamCode});
 
   final String? firebaseInitError;
+  final String? initialTeamCode;
 
   @override
   Widget build(BuildContext context) {
@@ -100,9 +116,10 @@ class RosterUpApp extends StatelessWidget {
             case 'dark':
               themeMode = ThemeMode.dark;
               break;
+            case 'system':
+              themeMode = ThemeMode.system;
+              break;
             default:
-              // Default to light mode if no preference or an old
-              // "system" value is stored.
               themeMode = ThemeMode.light;
           }
 
@@ -126,7 +143,7 @@ class RosterUpApp extends StatelessWidget {
               appBarTheme: const AppBarTheme(centerTitle: true),
             ),
             themeMode: themeMode,
-            home: const SplashScreen(),
+            home: SplashScreen(initialTeamCode: initialTeamCode),
           );
         },
       ),

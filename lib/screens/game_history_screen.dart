@@ -5,17 +5,55 @@ import 'package:provider/provider.dart';
 import '../models/game.dart';
 import '../providers/game_provider.dart';
 import '../providers/team_provider.dart';
+import '../utils/app_colors.dart';
+import '../utils/date_format_utils.dart';
 import '../widgets/ad_banner.dart';
 
-class GameHistoryScreen extends StatelessWidget {
+class GameHistoryScreen extends StatefulWidget {
   const GameHistoryScreen({super.key});
+
+  @override
+  State<GameHistoryScreen> createState() => _GameHistoryScreenState();
+}
+
+class _GameHistoryScreenState extends State<GameHistoryScreen> {
+  Future<List<Game>>? _future;
+  List<String> _lastTeamIds = [];
+
+  void _loadGames(List<String> teamIds) {
+    if (teamIds.isEmpty) {
+      setState(() {
+        _future = Future.value([]);
+        _lastTeamIds = teamIds;
+      });
+      return;
+    }
+    final gameProvider = context.read<GameProvider>();
+    setState(() {
+      _future = gameProvider.fetchPastGames(teamIds);
+      _lastTeamIds = teamIds;
+    });
+  }
+
+  Future<void> _refresh() async {
+    final teamProvider = context.read<TeamProvider>();
+    final teamIds = teamProvider.teams.map((t) => t.id).toList();
+    _loadGames(teamIds);
+    await _future;
+  }
 
   @override
   Widget build(BuildContext context) {
     final teamProvider = context.watch<TeamProvider>();
-    final gameProvider = context.read<GameProvider>();
     final teamIds = teamProvider.teams.map((t) => t.id).toList();
     final onSurfaceColor = Theme.of(context).colorScheme.onSurface;
+
+    // Load (or re-load when team membership changes) lazily.
+    if (_future == null || teamIds.join(',') != _lastTeamIds.join(',')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadGames(teamIds);
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -32,35 +70,34 @@ class GameHistoryScreen extends StatelessWidget {
                   style: GoogleFonts.inter(color: onSurfaceColor),
                 ),
               )
-            : FutureBuilder<List<Game>>(
-                future: gameProvider.fetchPastGames(teamIds),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState ==
-                      ConnectionState.waiting) {
-                    return const Center(
-                        child: CircularProgressIndicator());
-                  }
-                  if (snapshot.hasError) {
-                    return Center(
-                      child: Text(
-                        'Could not load past games.',
-                        style:
-                            GoogleFonts.inter(color: onSurfaceColor),
-                      ),
-                    );
-                  }
-                  final games = snapshot.data ?? [];
-                  if (games.isEmpty) {
-                    return Center(
-                      child: Text(
-                        'No past games yet.',
-                        style:
-                            GoogleFonts.inter(color: onSurfaceColor),
-                      ),
-                    );
-                  }
+            : RefreshIndicator(
+                onRefresh: _refresh,
+                child: FutureBuilder<List<Game>>(
+                  future: _future,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Text(
+                          'Could not load past games.',
+                          style: GoogleFonts.inter(color: onSurfaceColor),
+                        ),
+                      );
+                    }
+                    final games = snapshot.data ?? [];
+                    if (games.isEmpty) {
+                      return Center(
+                        child: Text(
+                          'No past games yet.',
+                          style: GoogleFonts.inter(color: onSurfaceColor),
+                        ),
+                      );
+                    }
 
-                  return ListView.builder(
+                    return ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 16),
                     itemCount: games.length,
@@ -74,42 +111,13 @@ class GameHistoryScreen extends StatelessWidget {
                       final teamName = team?.name ?? 'Unknown team';
 
                       final date = game.dateTime;
-                      final weekdayNames = [
-                        'Mon',
-                        'Tue',
-                        'Wed',
-                        'Thu',
-                        'Fri',
-                        'Sat',
-                        'Sun',
-                      ];
-                      const months = [
-                        'Jan',
-                        'Feb',
-                        'Mar',
-                        'Apr',
-                        'May',
-                        'Jun',
-                        'Jul',
-                        'Aug',
-                        'Sep',
-                        'Oct',
-                        'Nov',
-                        'Dec',
-                      ];
-
-                      final weekday =
-                          weekdayNames[date.weekday - 1];
-                      final month = months[date.month - 1];
-                      final day = date.day;
-                      final rawHour = date.hour;
-                      final hour = rawHour == 0 || rawHour == 12
-                          ? 12
-                          : rawHour % 12;
-                      final minute =
-                          date.minute.toString().padLeft(2, '0');
-                      final period =
-                          date.hour < 12 ? 'AM' : 'PM';
+                      final f = FormattedDate(date);
+                      final weekday = f.weekday;
+                      final month = f.month;
+                      final day = f.day;
+                      final hour = f.hour;
+                      final minute = f.minute;
+                      final period = f.period;
 
                       final inCount = game.getConfirmedCount();
                       final maybeCount = game.getMaybeCount();
@@ -123,7 +131,7 @@ class GameHistoryScreen extends StatelessWidget {
                           borderRadius:
                               BorderRadius.circular(16),
                           side: BorderSide(
-                              color: Colors.grey.shade200),
+                              color: Theme.of(context).colorScheme.outlineVariant),
                         ),
                         child: Padding(
                           padding: const EdgeInsets.all(16),
@@ -163,7 +171,7 @@ class GameHistoryScreen extends StatelessWidget {
                                     '${game.getConfirmedCount()} going',
                                     style: GoogleFonts.inter(
                                       fontSize: 13,
-                                      color: Colors.green,
+                                      color: AppColors.confirmed,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -195,6 +203,7 @@ class GameHistoryScreen extends StatelessWidget {
                   );
                 },
               ),
+            ),
       ),
       bottomNavigationBar: const AdBanner(),
     );

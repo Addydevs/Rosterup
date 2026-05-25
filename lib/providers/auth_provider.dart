@@ -8,10 +8,12 @@ class AuthProvider extends ChangeNotifier {
   FirebaseAuth get _auth => FirebaseAuth.instance;
   User? _user;
   bool _isLoading = false;
+  String? _lastError;
 
   User? get user => _user;
   bool get isAuthenticated => _user != null;
   bool get isLoading => _isLoading;
+  String? get lastError => _lastError;
 
   AuthProvider() {
     // Seed with any already-signed-in Firebase user so that
@@ -27,6 +29,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<bool> signInWithEmailAndPassword(String email, String password) async {
+    _lastError = null;
     try {
       _isLoading = true;
       notifyListeners();
@@ -36,6 +39,7 @@ class AuthProvider extends ChangeNotifier {
       return true;
     } on FirebaseAuthException catch (e) {
       debugPrint('Sign in error: ${e.message}');
+      _lastError = _friendlyAuthError(e.code);
       return false;
     } catch (e) {
       debugPrint('Sign in error (unexpected): $e');
@@ -45,6 +49,7 @@ class AuthProvider extends ChangeNotifier {
         debugPrint('Sign in succeeded despite unexpected error (currentUser is set).');
         return true;
       }
+      _lastError = 'An unexpected error occurred. Please try again.';
       return false;
     } finally {
       _isLoading = false;
@@ -53,6 +58,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<bool> createUserWithEmailAndPassword(String email, String password) async {
+    _lastError = null;
     try {
       _isLoading = true;
       notifyListeners();
@@ -62,6 +68,7 @@ class AuthProvider extends ChangeNotifier {
       return true;
     } on FirebaseAuthException catch (e) {
       debugPrint('Sign up error: ${e.message}');
+      _lastError = _friendlyAuthError(e.code);
       return false;
     } catch (e) {
       debugPrint('Sign up error (unexpected): $e');
@@ -71,6 +78,7 @@ class AuthProvider extends ChangeNotifier {
         debugPrint('Sign up succeeded despite unexpected error (currentUser is set).');
         return true;
       }
+      _lastError = 'An unexpected error occurred. Please try again.';
       return false;
     } finally {
       _isLoading = false;
@@ -95,6 +103,26 @@ class AuthProvider extends ChangeNotifier {
     await _auth.signOut();
   }
 
-  // mockSignIn kept previously for local-only flows has been removed in favor
-  // of real Firebase Authentication.
+  static String _friendlyAuthError(String code) {
+    switch (code) {
+      case 'user-not-found':
+      case 'wrong-password':
+      case 'invalid-credential':
+        return 'Incorrect email or password.';
+      case 'email-already-in-use':
+        return 'An account with this email already exists.';
+      case 'invalid-email':
+        return 'Please enter a valid email address.';
+      case 'weak-password':
+        return 'Password is too weak. Use at least 6 characters.';
+      case 'too-many-requests':
+        return 'Too many failed attempts. Please wait and try again.';
+      case 'user-disabled':
+        return 'This account has been disabled.';
+      case 'network-request-failed':
+        return 'Network error. Check your connection and try again.';
+      default:
+        return 'Something went wrong. Please try again.';
+    }
+  }
 }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
-import '../models/team.dart';
+import '../models/chat_message.dart';
 import '../providers/team_provider.dart';
 import '../providers/chat_provider.dart';
 import '../providers/auth_provider.dart';
@@ -21,6 +21,16 @@ class TeamChatScreen extends StatefulWidget {
 
 class _TeamChatScreenState extends State<TeamChatScreen> {
   final TextEditingController _controller = TextEditingController();
+  bool _subscribed = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_subscribed) {
+      _subscribed = true;
+      context.read<ChatProvider>().subscribeToTeam(widget.teamId);
+    }
+  }
 
   @override
   void dispose() {
@@ -41,8 +51,12 @@ class _TeamChatScreenState extends State<TeamChatScreen> {
     final teamProvider = context.watch<TeamProvider>();
     final team = teamProvider.teams.firstWhere((t) => t.id == widget.teamId);
     final chatProvider = context.watch<ChatProvider>();
-    chatProvider.subscribeToTeam(widget.teamId);
     final messages = chatProvider.messagesForTeam(widget.teamId);
+
+    // Mark this team's messages as read when viewing.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      chatProvider.markTeamAsRead(widget.teamId);
+    });
     final isMuted = currentUserId != null &&
         team.mutedMemberIds.contains(currentUserId);
     final isAdmin =
@@ -126,8 +140,8 @@ class _TeamChatScreenState extends State<TeamChatScreen> {
                                     ? Theme.of(context)
                                         .colorScheme
                                         .primary
-                                        .withOpacity(0.1)
-                                    : Colors.grey.shade100,
+                                        .withValues(alpha: 0.1)
+                                    : Theme.of(context).colorScheme.surfaceContainerHigh,
                                 borderRadius:
                                     BorderRadius.circular(16),
                               ),
@@ -149,9 +163,9 @@ class _TeamChatScreenState extends State<TeamChatScreen> {
                                     const SizedBox(height: 2),
                                   Text(
                                     message.text,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 14,
-                                      color: Colors.black87,
+                                      color: Theme.of(context).colorScheme.onSurface,
                                     ),
                                   ),
                                 ],

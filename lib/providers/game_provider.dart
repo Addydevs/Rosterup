@@ -1,15 +1,17 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/game.dart';
-import '../services/notification_service.dart';
 import '../services/analytics_service.dart';
 
 class GameProvider extends ChangeNotifier {
   // Lazily access Firestore so local-only flows don't require Firebase.init.
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
   final Uuid _uuid = const Uuid();
+  final _rng = Random.secure();
   
   List<Game> _games = [];
   List<Game> _publicGames = [];
@@ -86,31 +88,6 @@ class GameProvider extends ChangeNotifier {
         // Ignore analytics errors so the user flow stays smooth.
       }
 
-      // Schedule local reminders for this device: 24h and 1h before.
-      try {
-        final notificationService = NotificationService();
-        await notificationService.initialize();
-
-        final oneDayBefore = dateTime.subtract(const Duration(hours: 24));
-        final oneHourBefore = dateTime.subtract(const Duration(hours: 1));
-
-        await notificationService.scheduleGameReminder(
-          id: game.id.hashCode,
-          title: 'Game tomorrow',
-          body: 'You have a game with your team in 24 hours.',
-          scheduledTime: oneDayBefore,
-        );
-
-        await notificationService.scheduleGameReminder(
-          id: game.id.hashCode ^ 1,
-          title: 'Game soon',
-          body: 'Your game starts in 1 hour.',
-          scheduledTime: oneHourBefore,
-        );
-      } catch (_) {
-        // Ignore local notification errors so game creation still succeeds.
-      }
-      
       return game.id;
     } catch (e) {
       _error = e.toString();
@@ -129,8 +106,7 @@ class GameProvider extends ChangeNotifier {
     while (exists) {
       final buffer = StringBuffer();
       for (var i = 0; i < 6; i++) {
-        final millis = DateTime.now().millisecondsSinceEpoch + i;
-        buffer.write(chars[millis % chars.length]);
+        buffer.write(chars[_rng.nextInt(chars.length)]);
       }
       code = buffer.toString();
 

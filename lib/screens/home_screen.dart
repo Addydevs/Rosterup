@@ -6,8 +6,11 @@ import '../providers/auth_provider.dart';
 import '../providers/team_provider.dart';
 import '../providers/game_provider.dart';
 import '../providers/user_provider.dart';
+import '../providers/chat_provider.dart';
 import '../services/notification_service.dart';
 import '../services/analytics_service.dart';
+import '../services/deep_link_service.dart';
+import '../utils/theme_colors.dart';
 import 'games_screen.dart';
 import 'teams_screen.dart';
 import 'chat_screen.dart';
@@ -42,6 +45,21 @@ class _HomeScreenState extends State<HomeScreen> {
       TeamsScreen(initialJoinCode: widget.initialJoinTeamCode),
       const ChatScreen(),
     ];
+
+    // Listen for deep links that arrive while the app is already open.
+    DeepLinkService.instance.onTeamCodeReceived = (code) {
+      if (!mounted) return;
+      setState(() {
+        _currentIndex = 1; // Switch to Teams tab
+        _screens[1] = TeamsScreen(initialJoinCode: code);
+      });
+    };
+  }
+
+  @override
+  void dispose() {
+    DeepLinkService.instance.onTeamCodeReceived = null;
+    super.dispose();
   }
 
   @override
@@ -103,6 +121,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
+    final chatProvider = context.watch<ChatProvider>();
+    final unreadCount = chatProvider.totalUnreadCount;
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
@@ -120,7 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.all(24),
                     child: Material(
                       borderRadius: BorderRadius.circular(16),
-                      color: Colors.white,
+                      color: context.cardColor,
                       child: Padding(
                         padding: const EdgeInsets.all(20),
                         child: Column(
@@ -189,22 +210,30 @@ class _HomeScreenState extends State<HomeScreen> {
         },
         type: BottomNavigationBarType.fixed,
         selectedItemColor: colorScheme.primary,
-        unselectedItemColor: Colors.grey.shade500,
+        unselectedItemColor: colorScheme.onSurfaceVariant,
         showUnselectedLabels: true,
-        items: const [
-          BottomNavigationBarItem(
+        items: [
+          const BottomNavigationBarItem(
             icon: Icon(Icons.sports_soccer_outlined),
             activeIcon: Icon(Icons.sports_soccer),
             label: 'Games',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.group_outlined),
             activeIcon: Icon(Icons.group),
             label: 'Teams',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.chat_bubble_outline),
-            activeIcon: Icon(Icons.chat_bubble),
+            icon: Badge(
+              isLabelVisible: unreadCount > 0,
+              label: Text('$unreadCount'),
+              child: const Icon(Icons.chat_bubble_outline),
+            ),
+            activeIcon: Badge(
+              isLabelVisible: unreadCount > 0,
+              label: Text('$unreadCount'),
+              child: const Icon(Icons.chat_bubble),
+            ),
             label: 'Chat',
           ),
         ],

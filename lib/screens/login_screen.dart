@@ -5,7 +5,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
-import '../widgets/ad_banner.dart';
 import 'signup_screen.dart';
 import 'home_screen.dart';
 import 'profile_setup_screen.dart';
@@ -103,7 +102,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not sign in. Check your details.')),
+        SnackBar(content: Text(auth.lastError ?? 'Could not sign in. Check your details.')),
       );
     }
   }
@@ -257,7 +256,6 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: const AdBanner(),
     );
   }
 }

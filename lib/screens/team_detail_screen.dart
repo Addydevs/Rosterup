@@ -5,8 +5,12 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../constants/app_constants.dart';
 import '../models/team.dart';
 import '../models/user.dart';
+import '../utils/app_colors.dart';
+import '../utils/date_format_utils.dart';
+import '../utils/theme_colors.dart';
 import '../providers/team_provider.dart';
 import '../providers/game_provider.dart';
 import '../providers/auth_provider.dart';
@@ -134,7 +138,7 @@ class TeamDetailScreen extends StatelessWidget {
                             height: 4,
                             margin: const EdgeInsets.only(bottom: 16),
                             decoration: BoxDecoration(
-                              color: Colors.grey.shade300,
+                              color: context.handleColor,
                               borderRadius: BorderRadius.circular(2),
                             ),
                           ),
@@ -453,10 +457,10 @@ class TeamDetailScreen extends StatelessWidget {
           children: [
           Card(
             elevation: 0,
-            color: Colors.white,
+            color: context.cardColor,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: Colors.grey.shade200),
+              side: BorderSide(color: context.borderColor),
             ),
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -552,8 +556,9 @@ class TeamDetailScreen extends StatelessWidget {
                             tooltip: 'Share team code',
                             onPressed: () {
                               final message =
-                                  'Join my team on RosterUp with code ${team.teamCode}. '
-                                  'Download the RosterUp app and enter the code in Teams → Join by code.';
+                                  'Join my team on RosterUp with code ${team.teamCode}.\n\n'
+                                  'Download RosterUp: ${AppConstants.downloadUrl}\n'
+                                  'Then go to Teams → Join by code and enter ${team.teamCode}.';
                               AnalyticsService.logTeamShare(teamId: team.id);
                               Share.share(
                                 message,
@@ -641,9 +646,9 @@ class TeamDetailScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.grey.shade50,
+                color: context.subtleFill,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade200),
+                border: Border.all(color: context.borderColor),
               ),
               child: Text(
                 'No weekly schedule yet.\nUse “Schedule game” to set your usual game days.',
@@ -657,9 +662,9 @@ class TeamDetailScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.grey.shade50,
+                color: context.subtleFill,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade200),
+                border: Border.all(color: context.borderColor),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -696,9 +701,9 @@ class TeamDetailScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.grey.shade50,
+                color: context.subtleFill,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade200),
+                border: Border.all(color: context.borderColor),
               ),
               child: Text(
                 'No individual games scheduled yet.\nUse “Add game” below to create one.',
@@ -795,7 +800,7 @@ class TeamDetailScreen extends StatelessWidget {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
+                    color: context.handleColor,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -895,32 +900,8 @@ class TeamDetailScreen extends StatelessWidget {
 
               String formatDate(DateTime? date) {
                 if (date == null) return 'Pick date';
-                const months = [
-                  'Jan',
-                  'Feb',
-                  'Mar',
-                  'Apr',
-                  'May',
-                  'Jun',
-                  'Jul',
-                  'Aug',
-                  'Sep',
-                  'Oct',
-                  'Nov',
-                  'Dec',
-                ];
-                final weekdayNames = [
-                  'Mon',
-                  'Tue',
-                  'Wed',
-                  'Thu',
-                  'Fri',
-                  'Sat',
-                  'Sun',
-                ];
-                final weekday = weekdayNames[date.weekday - 1];
-                final month = months[date.month - 1];
-                return '$weekday, $month ${date.day}, ${date.year}';
+                final f = FormattedDate(date);
+                return '${f.weekday}, ${f.month} ${date.day}, ${date.year}';
               }
 
               String formatTime(TimeOfDay time) {
@@ -949,7 +930,7 @@ class TeamDetailScreen extends StatelessWidget {
                           height: 4,
                           margin: const EdgeInsets.only(bottom: 16),
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade300,
+                            color: context.handleColor,
                             borderRadius: BorderRadius.circular(2),
                           ),
                         ),
@@ -1199,9 +1180,9 @@ class _RosterSection extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: context.subtleFill,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: context.borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1500,14 +1481,13 @@ class _GameListTile extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final onSurfaceColor = colorScheme.onSurface;
     final date = game.dateTime;
-    final weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    final weekday = weekdayNames[date.weekday - 1];
-    final month = _monthAbbrev(date.month);
-    final day = date.day;
-    final rawHour = date.hour;
-    final hour = rawHour == 0 || rawHour == 12 ? 12 : rawHour % 12;
-    final minute = date.minute.toString().padLeft(2, '0');
-    final period = date.hour < 12 ? 'AM' : 'PM';
+    final f = FormattedDate(date);
+    final weekday = f.weekday;
+    final month = f.month;
+    final day = f.day;
+    final hour = f.hour;
+    final minute = f.minute;
+    final period = f.period;
 
     final currentStatus = game.confirmations[currentUserId];
     final inCount = game.getConfirmedCount();
@@ -1519,11 +1499,11 @@ class _GameListTile extends StatelessWidget {
 
     return Card(
       elevation: 0,
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.grey.shade200),
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: ListTile(
         contentPadding:
@@ -1677,14 +1657,14 @@ class _GameListTile extends StatelessWidget {
                   ChoiceChip(
                     label: Text("I'm in ($inCount)"),
                     selected: currentStatus == ConfirmationStatus.confirmed,
-                    selectedColor: Colors.green.withOpacity(0.18),
-                    backgroundColor: Colors.green.withOpacity(0.06),
+                    selectedColor: AppColors.confirmed.withOpacity(0.18),
+                    backgroundColor: AppColors.confirmed.withOpacity(0.06),
                     labelStyle: GoogleFonts.inter(
                       fontSize: 13,
                       fontWeight: currentStatus == ConfirmationStatus.confirmed
                           ? FontWeight.w600
                           : FontWeight.w500,
-                      color: Colors.green.shade800,
+                      color: AppColors.confirmed,
                     ),
                     onSelected: (_) {
                       if (isPast) {
@@ -1727,7 +1707,7 @@ class _GameListTile extends StatelessWidget {
                       fontWeight: currentStatus == ConfirmationStatus.maybe
                           ? FontWeight.w600
                           : FontWeight.w500,
-                      color: Colors.orange.shade800,
+                      color: AppColors.maybe,
                     ),
                     onSelected: (_) {
                       if (isPast) {
@@ -1749,14 +1729,14 @@ class _GameListTile extends StatelessWidget {
                   ChoiceChip(
                     label: Text("I'm out ($outCount)"),
                     selected: currentStatus == ConfirmationStatus.declined,
-                    selectedColor: Colors.red.withOpacity(0.18),
-                    backgroundColor: Colors.red.withOpacity(0.06),
+                    selectedColor: AppColors.declined.withOpacity(0.18),
+                    backgroundColor: AppColors.declined.withOpacity(0.06),
                     labelStyle: GoogleFonts.inter(
                       fontSize: 13,
                       fontWeight: currentStatus == ConfirmationStatus.declined
                           ? FontWeight.w600
                           : FontWeight.w500,
-                      color: Colors.red.shade800,
+                      color: AppColors.declined,
                     ),
                     onSelected: (_) {
                       if (isPast) {
@@ -1788,24 +1768,6 @@ class _GameListTile extends StatelessWidget {
         },
       ),
     );
-  }
-
-  String _monthAbbrev(int month) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return months[month - 1];
   }
 
   Future<void> _showEditGameSheet(BuildContext context, Game game) async {
@@ -1842,32 +1804,8 @@ class _GameListTile extends StatelessWidget {
     }
 
     String formatDate(DateTime date) {
-      const months = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec',
-      ];
-      final weekdayNames = [
-        'Mon',
-        'Tue',
-        'Wed',
-        'Thu',
-        'Fri',
-        'Sat',
-        'Sun',
-      ];
-      final weekday = weekdayNames[date.weekday - 1];
-      final month = months[date.month - 1];
-      return '$weekday, $month ${date.day}, ${date.year}';
+      final f = FormattedDate(date);
+      return '${f.weekday}, ${f.month} ${date.day}, ${date.year}';
     }
 
     String formatTime(TimeOfDay time) {
@@ -1903,7 +1841,7 @@ class _GameListTile extends StatelessWidget {
                       height: 4,
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
+                        color: context.handleColor,
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),

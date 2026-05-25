@@ -2,7 +2,7 @@ name: roster_up
 description: "RosterUp - Coordinate pickup games with your team. Simple confirmations, no complexity."
 publish_to: 'none'
 
-version: 1.0.3+9
+version: 1.0.5+11
 
 environment:
   sdk: '>=3.1.0 <4.0.0'
@@ -20,9 +20,8 @@ dependencies:
   firebase_crashlytics: ^5.0.5
   firebase_remote_config:
   
-  # State Management & Navigation
+  # State Management
   provider: ^6.1.1
-  go_router: ^17.0.1
   
   # UI & Design
   cupertino_icons: ^1.0.2
@@ -30,8 +29,10 @@ dependencies:
   
   # Utilities
   shared_preferences: ^2.2.2
-  intl: ^0.20.2
   url_launcher: ^6.2.2
+
+  # Deep Linking
+  app_links: ^6.3.2
 
   # Ads
   google_mobile_ads: ^6.0.0

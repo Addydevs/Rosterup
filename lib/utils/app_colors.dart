@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // Primary Colors - Sports theme
-  static const Color primary = Color(0xFF2E7D32); // Green for sports
-  static const Color primaryLight = Color(0xFF66BB6A);
-  static const Color primaryDark = Color(0xFF1B5E20);
+  // Primary Colors – matches the app's theme seed (deep blue)
+  static const Color primary = Color(0xFF0056D6);
+  static const Color primaryLight = Color(0xFF4D8AFF);
+  static const Color primaryDark = Color(0xFF003BA3);
   
   // Status Colors
   static const Color confirmed = Color(0xFF4CAF50); // Green - I'm In

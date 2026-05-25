@@ -6,18 +6,79 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart';
 
+import '../constants/app_constants.dart';
 import '../models/game.dart';
 import '../providers/auth_provider.dart';
 import '../providers/game_provider.dart';
 import '../providers/team_provider.dart';
 import '../providers/user_provider.dart';
-import '../widgets/ad_banner.dart';
+import '../utils/app_colors.dart';
+import '../utils/date_format_utils.dart';
+import '../utils/theme_colors.dart';
 import '../services/analytics_service.dart';
 
-class GameDetailScreen extends StatelessWidget {
+class GameDetailScreen extends StatefulWidget {
   final String gameId;
 
   const GameDetailScreen({super.key, required this.gameId});
+
+  @override
+  State<GameDetailScreen> createState() => _GameDetailScreenState();
+}
+
+class _GameDetailScreenState extends State<GameDetailScreen> {
+  bool _isSubmitting = false;
+  String? _streakGameId;
+  Future<String?>? _streakFuture;
+
+  String _displayName(String userId) {
+    final userProvider = context.read<UserProvider>();
+    final user = userProvider.getUserById(userId);
+    if (user != null && user.name.isNotEmpty) {
+      final current = userProvider.currentUser;
+      if (current != null && current.id == userId) {
+        return '${user.name} (you)';
+      }
+      return user.name;
+    }
+    return userId;
+  }
+
+  Future<String?> _loadStreakLabel(
+    Game game,
+    GameProvider gameProvider,
+    String? currentUserId,
+  ) async {
+    final pastGames = await gameProvider.fetchPastGames([game.teamId]);
+    final now = DateTime.now();
+    final relevant = pastGames
+        .where((g) => g.dateTime.isBefore(now))
+        .toList()
+      ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
+
+    if (relevant.isEmpty || currentUserId == null) return null;
+
+    int streak = 0;
+    DateTime? firstGameInStreak;
+
+    for (final g in relevant) {
+      final status = g.confirmations[currentUserId];
+      if (status == ConfirmationStatus.confirmed) {
+        streak += 1;
+        firstGameInStreak ??= g.dateTime;
+      } else {
+        break;
+      }
+    }
+
+    if (streak <= 1 || firstGameInStreak == null) return null;
+
+    final weeks = now.difference(firstGameInStreak).inDays ~/ 7 + 1;
+    if (weeks >= 3) {
+      return '$streak‑game streak over $weeks weeks';
+    }
+    return "You've made $streak games in a row";
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +86,7 @@ class GameDetailScreen extends StatelessWidget {
     final teamProvider = context.watch<TeamProvider>();
     final userProvider = context.watch<UserProvider>();
     final auth = context.watch<AuthProvider>();
-    final game = gameProvider.getGameById(gameId);
+    final game = gameProvider.getGameById(widget.gameId);
 
     if (game == null) {
       return Scaffold(
@@ -46,28 +107,13 @@ class GameDetailScreen extends StatelessWidget {
     final teamName = team?.name ?? 'Unknown team';
 
     final date = game.dateTime;
-    final weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    final weekday = weekdayNames[date.weekday - 1];
-    final month = months[date.month - 1];
-    final day = date.day;
-    final rawHour = date.hour;
-    final hour = rawHour == 0 || rawHour == 12 ? 12 : rawHour % 12;
-    final minute = date.minute.toString().padLeft(2, '0');
-    final period = date.hour < 12 ? 'AM' : 'PM';
+    final f = FormattedDate(date);
+    final weekday = f.weekday;
+    final month = f.month;
+    final day = f.day;
+    final hour = f.hour;
+    final minute = f.minute;
+    final period = f.period;
     final locationText =
         game.location.isEmpty ? 'No location set' : game.location;
 
@@ -90,20 +136,24 @@ class GameDetailScreen extends StatelessWidget {
         buffer.writeln('Game access code: $accessCode');
       }
 
+      buffer
+        ..writeln()
+        ..writeln('Download RosterUp: ${AppConstants.downloadUrl}');
+
       if (teamCode != null && teamCode.isNotEmpty) {
         buffer
           ..writeln()
           ..writeln('How to join:')
           ..writeln(
-            '- Open RosterUp and create an account.',
+            '1. Download RosterUp and create an account.',
           )
           ..writeln(
-            '- Go to Teams → Join by code and enter $teamCode.',
+            '2. Go to Teams → Join by code and enter $teamCode.',
           );
 
         if (hasAccessCode) {
           buffer.writeln(
-            '- Then go to Games → Discover (globe icon) → "Join with access code" and enter $accessCode.',
+            '3. Then go to Games → Discover (globe icon) → "Join with access code" and enter $accessCode.',
           );
         }
       }
@@ -132,51 +182,17 @@ class GameDetailScreen extends StatelessWidget {
       ...outPlayers,
       ...noResponsePlayers,
     }.where((id) => id.isNotEmpty).toList();
-    userProvider.loadUsersByIds(allUserIds);
-
-    String _displayName(String userId) {
-      final user = userProvider.getUserById(userId);
-      if (user != null && user.name.isNotEmpty) {
-        final current = userProvider.currentUser;
-        if (current != null && current.id == userId) {
-          return '${user.name} (you)';
-        }
-        return user.name;
-      }
-      return userId;
+    final uncachedIds =
+        allUserIds.where((id) => userProvider.getUserById(id) == null).toList();
+    if (uncachedIds.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.read<UserProvider>().loadUsersByIds(uncachedIds);
+      });
     }
 
-    Future<String?> _loadStreakLabel() async {
-      final pastGames =
-          await gameProvider.fetchPastGames([game.teamId]);
-      final now = DateTime.now();
-      final relevant = pastGames
-          .where((g) => g.dateTime.isBefore(now))
-          .toList()
-        ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
-
-      if (relevant.isEmpty || currentUserId == null) return null;
-
-      int streak = 0;
-      DateTime? firstGameInStreak;
-
-      for (final g in relevant) {
-        final status = g.confirmations[currentUserId];
-        if (status == ConfirmationStatus.confirmed) {
-          streak += 1;
-          firstGameInStreak ??= g.dateTime;
-        } else {
-          break;
-        }
-      }
-
-      if (streak <= 1 || firstGameInStreak == null) return null;
-
-      final weeks = now.difference(firstGameInStreak).inDays ~/ 7 + 1;
-      if (weeks >= 3) {
-        return '$streak‑game streak over $weeks weeks';
-      }
-      return 'You’ve made $streak games in a row';
+    if (_streakFuture == null || _streakGameId != widget.gameId) {
+      _streakGameId = widget.gameId;
+      _streakFuture = _loadStreakLabel(game, gameProvider, currentUserId);
     }
 
     return Scaffold(
@@ -219,7 +235,7 @@ class GameDetailScreen extends StatelessWidget {
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: Colors.grey.shade200),
+              side: BorderSide(color: context.borderColor),
             ),
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -287,9 +303,9 @@ class GameDetailScreen extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
+                        color: context.subtleFill,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade300),
+                        border: Border.all(color: context.borderColor),
                       ),
                       child: Row(
                         children: [
@@ -398,7 +414,7 @@ class GameDetailScreen extends StatelessWidget {
           const SizedBox(height: 24),
           if (currentUserId != null)
             FutureBuilder<String?>(
-              future: _loadStreakLabel(),
+              future: _streakFuture,
               builder: (context, snapshot) {
                 final label = snapshot.data;
                 if (snapshot.connectionState ==
@@ -411,11 +427,11 @@ class GameDetailScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color:
-                        Colors.blue.withOpacity(0.04),
+                        Colors.blue.withValues(alpha: 0.04),
                     borderRadius:
                         BorderRadius.circular(12),
                     border: Border.all(
-                      color: Colors.blue.withOpacity(0.12),
+                      color: Colors.blue.withValues(alpha: 0.12),
                     ),
                   ),
                   child: Row(
@@ -458,71 +474,92 @@ class GameDetailScreen extends StatelessWidget {
                 _statusButton(
                   context: context,
                   label: "I'm in",
-                  color: Colors.green,
+                  color: AppColors.confirmed,
                   isSelected: currentStatus == ConfirmationStatus.confirmed,
+                  isLoading: _isSubmitting,
                   onPressed: () async {
-                    await context.read<GameProvider>().confirmAttendance(
-                          gameId: game.id,
-                          userId: currentUserId,
-                          status: ConfirmationStatus.confirmed,
-                        );
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Status set to In'),
-                      ),
-                    );
+                    if (_isSubmitting) return;
+                    setState(() => _isSubmitting = true);
+                    try {
+                      await context.read<GameProvider>().confirmAttendance(
+                            gameId: game.id,
+                            userId: currentUserId,
+                            status: ConfirmationStatus.confirmed,
+                          );
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Status set to In'),
+                        ),
+                      );
+                    } finally {
+                      if (mounted) setState(() => _isSubmitting = false);
+                    }
                   },
                 ),
                 _statusButton(
                   context: context,
                   label: 'Maybe',
-                  color: Colors.orange,
+                  color: AppColors.maybe,
                   isSelected: currentStatus == ConfirmationStatus.maybe,
+                  isLoading: _isSubmitting,
                   onPressed: () async {
-                    await context.read<GameProvider>().confirmAttendance(
-                          gameId: game.id,
-                          userId: currentUserId,
-                          status: ConfirmationStatus.maybe,
-                        );
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Status set to Maybe'),
-                      ),
-                    );
+                    if (_isSubmitting) return;
+                    setState(() => _isSubmitting = true);
+                    try {
+                      await context.read<GameProvider>().confirmAttendance(
+                            gameId: game.id,
+                            userId: currentUserId,
+                            status: ConfirmationStatus.maybe,
+                          );
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Status set to Maybe'),
+                        ),
+                      );
+                    } finally {
+                      if (mounted) setState(() => _isSubmitting = false);
+                    }
                   },
                 ),
                 _statusButton(
                   context: context,
                   label: "I'm out",
-                  color: Colors.red,
+                  color: AppColors.declined,
                   isSelected: currentStatus == ConfirmationStatus.declined,
+                  isLoading: _isSubmitting,
                   onPressed: () async {
+                    if (_isSubmitting) return;
                     // Ask for a quick reason when going Out.
                     final reasonCode =
                         await _showOutReasonSheet(context);
 
-                    await context.read<GameProvider>().confirmAttendance(
-                          gameId: game.id,
-                          userId: currentUserId,
-                          status: ConfirmationStatus.declined,
-                        );
-
-                    if (reasonCode != null && reasonCode.isNotEmpty) {
-                      await context.read<GameProvider>().setDeclineReason(
+                    setState(() => _isSubmitting = true);
+                    try {
+                      await context.read<GameProvider>().confirmAttendance(
                             gameId: game.id,
                             userId: currentUserId,
-                            reasonCode: reasonCode,
+                            status: ConfirmationStatus.declined,
                           );
-                    }
 
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Status set to Out'),
-                      ),
-                    );
+                      if (reasonCode != null && reasonCode.isNotEmpty) {
+                        await context.read<GameProvider>().setDeclineReason(
+                              gameId: game.id,
+                              userId: currentUserId,
+                              reasonCode: reasonCode,
+                            );
+                      }
+
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Status set to Out'),
+                        ),
+                      );
+                    } finally {
+                      if (mounted) setState(() => _isSubmitting = false);
+                    }
                   },
                 ),
               ],
@@ -583,15 +620,42 @@ class GameDetailScreen extends StatelessWidget {
                 final occupancyPercent =
                     (totalInIncludingGuests / maxPlayers * 100).round();
                 if (spotsLeft > 0 && spotsLeft <= 3) {
-                  return Text(
-                    spotsLeft == 1
-                        ? 'Only 1 spot left – invite a teammate'
-                        : 'Only $spotsLeft spots left – invite more players',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: Colors.orange,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  return Row(
+                    children: [
+                      Text(
+                        spotsLeft == 1
+                            ? 'Only 1 spot left'
+                            : 'Only $spotsLeft spots left',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: Colors.orange,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        onPressed: () {
+                          Share.share(
+                            shareMessage,
+                            subject: 'Join our game on RosterUp',
+                          );
+                        },
+                        icon: const Icon(Icons.person_add, size: 14),
+                        label: Text(
+                          'Invite',
+                          style: GoogleFonts.inter(fontSize: 12),
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 0,
+                          ),
+                          minimumSize: const Size(0, 28),
+                          tapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                    ],
                   );
                 } else if (spotsLeft <= 0) {
                   return const SizedBox.shrink();
@@ -616,17 +680,17 @@ class GameDetailScreen extends StatelessWidget {
                 label: hasGuests
                     ? "In (${inPlayers.length} + $totalGuests guests)"
                     : "In (${inPlayers.length})",
-                color: Colors.green,
+                color: AppColors.confirmed,
               ),
               _summaryChip(
                 context: context,
                 label: "Maybe (${maybePlayers.length})",
-                color: Colors.orange,
+                color: AppColors.maybe,
               ),
               _summaryChip(
                 context: context,
                 label: "Out (${outPlayers.length})",
-                color: Colors.red,
+                color: AppColors.declined,
               ),
             ],
           ),
@@ -638,7 +702,7 @@ class GameDetailScreen extends StatelessWidget {
           _statusSection(
             context: context,
             title: "I'm in",
-            color: Colors.green,
+            color: AppColors.confirmed,
             users: inPlayers,
             displayName: _displayName,
           ),
@@ -646,7 +710,7 @@ class GameDetailScreen extends StatelessWidget {
           _statusSection(
             context: context,
             title: 'Maybe',
-            color: Colors.orange,
+            color: AppColors.maybe,
             users: maybePlayers,
             displayName: _displayName,
           ),
@@ -730,7 +794,7 @@ class GameDetailScreen extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.grey.shade200),
+        side: BorderSide(color: context.borderColor),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -829,7 +893,7 @@ class GameDetailScreen extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.grey.shade200),
+        side: BorderSide(color: context.borderColor),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -850,7 +914,7 @@ class GameDetailScreen extends StatelessWidget {
                   '${users.length}',
                   style: GoogleFonts.inter(
                     fontSize: 13,
-                    color: Colors.red,
+                    color: AppColors.declined,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -907,7 +971,7 @@ class GameDetailScreen extends StatelessWidget {
           fontWeight: FontWeight.w600,
         ),
       ),
-      backgroundColor: color.withOpacity(0.08),
+      backgroundColor: color.withValues(alpha: 0.08),
       labelStyle: TextStyle(color: color),
     );
   }
@@ -918,10 +982,11 @@ class GameDetailScreen extends StatelessWidget {
     required Color color,
     required bool isSelected,
     required VoidCallback onPressed,
+    bool isLoading = false,
   }) {
     final background =
-        isSelected ? color.withOpacity(0.1) : Colors.grey.shade100;
-    final borderColor = isSelected ? color : Colors.grey.shade300;
+        isSelected ? color.withValues(alpha: 0.1) : context.chipBackground;
+    final borderColor = isSelected ? color : context.borderColor;
     final textColor = isSelected
         ? color
         : Theme.of(context).colorScheme.onSurface;
@@ -933,14 +998,20 @@ class GameDetailScreen extends StatelessWidget {
           foregroundColor: textColor,
           side: BorderSide(color: borderColor),
         ),
-        onPressed: onPressed,
-        child: Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        onPressed: isLoading ? null : onPressed,
+        child: isLoading
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
       ),
     );
   }
@@ -975,7 +1046,7 @@ class _LocationMapSection extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.grey.shade200),
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

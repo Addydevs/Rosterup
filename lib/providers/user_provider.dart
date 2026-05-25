@@ -67,14 +67,24 @@ class UserProvider extends ChangeNotifier {
   }
 
   Future<void> loadUsersByIds(List<String> ids) async {
-    final toFetch =
-        ids.where((id) => id.isNotEmpty && !_usersById.containsKey(id)).toList();
+    final toFetch = ids
+        .where((id) => id.isNotEmpty && !_usersById.containsKey(id))
+        .toList();
     if (toFetch.isEmpty) return;
 
     try {
-      for (final id in toFetch) {
-        final doc = await _firestore.collection('users').doc(id).get();
-        if (doc.exists) {
+      // Firestore whereIn supports up to 30 items per query.
+      const chunkSize = 30;
+      for (var i = 0; i < toFetch.length; i += chunkSize) {
+        final chunk = toFetch.sublist(
+          i,
+          (i + chunkSize).clamp(0, toFetch.length),
+        );
+        final snap = await _firestore
+            .collection('users')
+            .where(FieldPath.documentId, whereIn: chunk)
+            .get();
+        for (final doc in snap.docs) {
           final user = AppUser.fromFirestore(doc);
           _usersById[user.id] = user;
         }

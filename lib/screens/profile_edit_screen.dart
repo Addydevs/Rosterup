@@ -20,6 +20,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   late TextEditingController _phoneController;
 
   bool _isSubmitting = false;
+  bool _initialized = false;
 
   @override
   void initState() {
@@ -31,10 +32,13 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final userProvider = context.read<UserProvider>();
-    final current = userProvider.currentUser;
-    _nameController.text = current?.name ?? '';
-    _phoneController.text = current?.phoneNumber ?? '';
+    if (!_initialized) {
+      _initialized = true;
+      final userProvider = context.read<UserProvider>();
+      final current = userProvider.currentUser;
+      _nameController.text = current?.name ?? '';
+      _phoneController.text = current?.phoneNumber ?? '';
+    }
   }
 
   @override
@@ -163,6 +167,12 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                     labelText: 'Phone (optional)',
                     border: OutlineInputBorder(),
                   ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) return null;
+                    final digits = value.replaceAll(RegExp(r'[\s\-().+]'), '');
+                    if (RegExp(r'^\d{6,15}$').hasMatch(digits)) return null;
+                    return 'Enter a valid phone number';
+                  },
                 ),
                 const SizedBox(height: 24),
                 SizedBox(

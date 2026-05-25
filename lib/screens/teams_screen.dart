@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../constants/app_constants.dart';
 import '../models/team.dart';
 import '../providers/team_provider.dart';
 import '../providers/auth_provider.dart';
@@ -67,7 +68,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                         height: 4,
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade300,
+                          color: Theme.of(context).colorScheme.outline,
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -255,7 +256,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                         height: 4,
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade300,
+                          color: Theme.of(context).colorScheme.outline,
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -513,11 +514,11 @@ class _TeamsScreenState extends State<TeamsScreen> {
                               : team.sport.label;
                       return Card(
                         elevation: 0,
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.surfaceContainerLow,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                           side: BorderSide(
-                            color: Colors.grey.shade200,
+                            color: Theme.of(context).colorScheme.outlineVariant,
                           ),
                         ),
                         child: ListTile(
@@ -572,8 +573,9 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                   InkWell(
                                     onTap: () {
                                       final message =
-                                          'Join my team on RosterUp with code ${team.teamCode}. '
-                                          'Download the RosterUp app and enter the code in Teams → Join by code.';
+                                          'Join my team on RosterUp with code ${team.teamCode}.\n\n'
+                                          'Download RosterUp: ${AppConstants.downloadUrl}\n'
+                                          'Then go to Teams → Join by code and enter ${team.teamCode}.';
                                       AnalyticsService.logTeamShare(
                                         teamId: team.id,
                                       );
