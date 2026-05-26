@@ -13,8 +13,15 @@ import 'login_screen.dart';
 import 'profile_edit_screen.dart';
 import 'faq_screen.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _isCheckingUpdate = false;
 
   @override
   Widget build(BuildContext context) {
@@ -197,12 +204,24 @@ class SettingsScreen extends StatelessWidget {
             ),
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.system_update),
+              leading: _isCheckingUpdate
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.system_update),
               title: Text(
                 'Check for updates',
                 style: GoogleFonts.inter(),
               ),
-              onTap: () => UpdateService.checkForUpdates(context),
+              onTap: _isCheckingUpdate
+                  ? null
+                  : () async {
+                      setState(() => _isCheckingUpdate = true);
+                      await UpdateService.checkForUpdates(context);
+                      if (mounted) setState(() => _isCheckingUpdate = false);
+                    },
             ),
             ListTile(
               contentPadding: EdgeInsets.zero,

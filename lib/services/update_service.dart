@@ -14,8 +14,9 @@ class UpdateService {
 
       await remoteConfig.setConfigSettings(
         RemoteConfigSettings(
-          fetchTimeout: Duration(seconds: 10),
-          minimumFetchInterval: Duration(hours: 1),
+          fetchTimeout: const Duration(seconds: 10),
+          // Zero so a manual "Check for updates" tap always hits the server.
+          minimumFetchInterval: Duration.zero,
         ),
       );
       await remoteConfig.fetchAndActivate();
