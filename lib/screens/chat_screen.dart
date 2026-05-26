@@ -4,8 +4,28 @@ import 'package:provider/provider.dart';
 
 import '../providers/team_provider.dart';
 import '../providers/chat_provider.dart';
+import '../utils/date_format_utils.dart';
 import '../widgets/ad_banner.dart';
 import 'team_chat_screen.dart';
+
+/// Returns "Today", "Yesterday", a weekday name, or a short date depending on age.
+String _formatChatTime(DateTime dt) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final msgDay = DateTime(dt.year, dt.month, dt.day);
+  final diff = today.difference(msgDay).inDays;
+  if (diff == 0) {
+    final f = FormattedDate(dt);
+    return f.time; // "11:30 AM"
+  } else if (diff == 1) {
+    return 'Yesterday';
+  } else if (diff < 7) {
+    return FormattedDate(dt).weekday; // "Mon"
+  } else {
+    final f = FormattedDate(dt);
+    return '${f.month} ${f.day}'; // "Jan 5"
+  }
+}
 
 class ChatScreen extends StatelessWidget {
   const ChatScreen({super.key});
@@ -58,19 +78,27 @@ class ChatScreen extends StatelessWidget {
                             chatProvider.messagesForTeam(team.id);
                         final lastMessage =
                             messages.isNotEmpty ? messages.last : null;
+                        final unread =
+                            chatProvider.unreadCountForTeam(team.id);
 
                         return ListTile(
-                          leading: CircleAvatar(
-                            child: Text(
-                              team.sport.emoji,
-                              style: const TextStyle(fontSize: 20),
+                          leading: Badge(
+                            isLabelVisible: unread > 0,
+                            label: Text('$unread'),
+                            child: CircleAvatar(
+                              child: Text(
+                                team.sport.emoji,
+                                style: const TextStyle(fontSize: 20),
+                              ),
                             ),
                           ),
                           title: Text(
                             team.name,
                             style: GoogleFonts.inter(
                               fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: unread > 0
+                                  ? FontWeight.w700
+                                  : FontWeight.w600,
                               color: onSurfaceColor,
                             ),
                           ),
@@ -83,6 +111,20 @@ class ChatScreen extends StatelessWidget {
                               color: onSurfaceColor,
                             ),
                           ),
+                          trailing: lastMessage != null
+                              ? Text(
+                                  _formatChatTime(lastMessage.createdAt),
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    color: unread > 0
+                                        ? Theme.of(context).colorScheme.primary
+                                        : onSurfaceColor,
+                                    fontWeight: unread > 0
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
+                                  ),
+                                )
+                              : null,
                           onTap: () {
                             Navigator.of(context).push(
                               MaterialPageRoute(

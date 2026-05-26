@@ -82,7 +82,8 @@ class _DiscoverGamesScreenState extends State<DiscoverGamesScreen> {
     }
 
     final pos = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.best,
+      locationSettings:
+          const LocationSettings(accuracy: LocationAccuracy.best),
     );
     setState(() {
       _position = pos;

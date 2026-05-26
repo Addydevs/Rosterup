@@ -80,6 +80,176 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
     return "You've made $streak games in a row";
   }
 
+  Future<void> _showEditGameSheet(BuildContext context, Game game) async {
+    final locationController = TextEditingController(text: game.location);
+    DateTime selectedDate = game.dateTime;
+    TimeOfDay selectedTime =
+        TimeOfDay(hour: game.dateTime.hour, minute: game.dateTime.minute);
+    bool isPublic = game.isPublic;
+
+    String fmtDate(DateTime d) {
+      final f = FormattedDate(d);
+      return '${f.weekday}, ${f.month} ${d.day}, ${d.year}';
+    }
+
+    String fmtTime(TimeOfDay t) {
+      final h = t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod;
+      final m = t.minute.toString().padLeft(2, '0');
+      final p = t.period == DayPeriod.am ? 'AM' : 'PM';
+      return '$h:$m $p';
+    }
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        bool isSaving = false;
+        return StatefulBuilder(builder: (ctx, setSheetState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 16,
+              bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(ctx).colorScheme.outlineVariant,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Text(
+                  'Edit game',
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final now = DateTime.now();
+                          final date = await showDatePicker(
+                            context: ctx,
+                            initialDate:
+                                selectedDate.isBefore(now) ? now : selectedDate,
+                            firstDate: now,
+                            lastDate: DateTime(now.year + 2),
+                          );
+                          if (date != null) setSheetState(() => selectedDate = date);
+                        },
+                        icon: const Icon(Icons.event, size: 18),
+                        label: Text(fmtDate(selectedDate)),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final time = await showTimePicker(
+                      context: ctx,
+                      initialTime: selectedTime,
+                    );
+                    if (time != null) setSheetState(() => selectedTime = time);
+                  },
+                  icon: const Icon(Icons.access_time, size: 18),
+                  label: Text(fmtTime(selectedTime)),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: locationController,
+                  decoration: const InputDecoration(
+                    labelText: 'Location',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    'Public game',
+                    style: GoogleFonts.inter(fontSize: 14),
+                  ),
+                  value: isPublic,
+                  onChanged: (v) => setSheetState(() => isPublic = v),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: isSaving
+                        ? null
+                        : () async {
+                            setSheetState(() => isSaving = true);
+                            try {
+                              final newDateTime = DateTime(
+                                selectedDate.year,
+                                selectedDate.month,
+                                selectedDate.day,
+                                selectedTime.hour,
+                                selectedTime.minute,
+                              );
+                              await context
+                                  .read<GameProvider>()
+                                  .updateGameDetails(
+                                    gameId: game.id,
+                                    dateTime: newDateTime,
+                                    location:
+                                        locationController.text.trim(),
+                                  );
+                              if (!context.mounted) return;
+                              Navigator.of(sheetContext).pop();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text('Game updated')),
+                              );
+                            } catch (e) {
+                              if (!context.mounted) return;
+                              setSheetState(() => isSaving = false);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                    content:
+                                        Text('Could not update game: $e')),
+                              );
+                            }
+                          },
+                    child: isSaving
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            'Save changes',
+                            style: GoogleFonts.inter(
+                                fontWeight: FontWeight.w600),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        });
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final gameProvider = context.watch<GameProvider>();
@@ -162,6 +332,9 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
     }();
 
     final currentUserId = auth.user?.uid;
+    final isAdmin = currentUserId != null &&
+        team != null &&
+        currentUserId == team.adminId;
     final currentStatus = currentUserId != null
         ? game.confirmations[currentUserId]
         : null;
@@ -207,6 +380,12 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         actions: [
+          if (isAdmin)
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Edit game',
+              onPressed: () => _showEditGameSheet(context, game),
+            ),
           IconButton(
             icon: const Icon(Icons.ios_share),
             tooltip: 'Share game',
@@ -325,7 +504,7 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  accessCode!,
+                                  accessCode,
                                   style: GoogleFonts.inter(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,

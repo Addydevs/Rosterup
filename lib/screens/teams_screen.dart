@@ -39,6 +39,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
     final locationController = TextEditingController();
     final customSportController = TextEditingController();
     Sport selectedSport = Sport.basketball;
+    bool isCreating = false;
 
     showModalBottomSheet(
       context: context,
@@ -48,7 +49,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
       ),
       builder: (sheetContext) {
         return StatefulBuilder(
-          builder: (context, setState) {
+          builder: (context, setSheetState) {
             return SingleChildScrollView(
               child: Padding(
                 padding: EdgeInsets.only(
@@ -104,7 +105,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                       }).toList(),
                       onChanged: (value) {
                         if (value != null) {
-                          setState(() {
+                          setSheetState(() {
                             selectedSport = value;
                           });
                         }
@@ -134,84 +135,99 @@ class _TeamsScreenState extends State<TeamsScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(
-                        onPressed: () async {
-                          final name = nameController.text.trim();
-                          final location = locationController.text.trim();
-                          final customSportName =
-                              customSportController.text.trim();
+                        onPressed: isCreating
+                            ? null
+                            : () async {
+                                final name = nameController.text.trim();
+                                final location =
+                                    locationController.text.trim();
+                                final customSportName =
+                                    customSportController.text.trim();
 
-                          if (name.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Please enter a team name'),
-                              ),
-                            );
-                            return;
-                          }
+                                if (name.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content:
+                                          Text('Please enter a team name'),
+                                    ),
+                                  );
+                                  return;
+                                }
 
-                          if (selectedSport == Sport.other &&
-                              customSportName.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Please enter an activity name',
+                                if (selectedSport == Sport.other &&
+                                    customSportName.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Please enter an activity name',
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                final auth = context.read<AuthProvider>();
+                                final user = auth.user;
+
+                                if (user == null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'You must be logged in to create a team',
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                setSheetState(() => isCreating = true);
+                                try {
+                                  await context
+                                      .read<TeamProvider>()
+                                      .createTeam(
+                                        name: name,
+                                        sport: selectedSport,
+                                        adminId: user.uid,
+                                        location: location,
+                                        customSportName:
+                                            selectedSport == Sport.other
+                                                ? customSportName
+                                                : null,
+                                      );
+
+                                  if (!context.mounted) return;
+                                  setSheetState(() => isCreating = false);
+                                  Navigator.of(sheetContext).pop();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Team created'),
+                                    ),
+                                  );
+                                } catch (_) {
+                                  if (!context.mounted) return;
+                                  setSheetState(() => isCreating = false);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Could not create team. Please try again.',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              },
+                        child: isCreating
+                            ? const SizedBox(
+                                height: 16,
+                                width: 16,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2),
+                              )
+                            : Text(
+                                'Create team',
+                                style: GoogleFonts.inter(
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                            );
-                            return;
-                          }
-
-                          final auth = context.read<AuthProvider>();
-                          final user = auth.user;
-
-                          if (user == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'You must be logged in to create a team',
-                                ),
-                              ),
-                            );
-                            return;
-                          }
-
-                          try {
-                            await context.read<TeamProvider>().createTeam(
-                                  name: name,
-                                  sport: selectedSport,
-                                  adminId: user.uid,
-                                  location: location,
-                                  customSportName:
-                                      selectedSport == Sport.other
-                                          ? customSportName
-                                          : null,
-                                );
-
-                            if (!context.mounted) return;
-
-                            Navigator.of(sheetContext).pop();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Team created'),
-                              ),
-                            );
-                          } catch (_) {
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Could not create team. Please try again.',
-                                ),
-                              ),
-                            );
-                          }
-                        },
-                        child: Text(
-                          'Create team',
-                          style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
                       ),
                     ),
                   ],
@@ -227,6 +243,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
   void _showJoinTeamSheet(BuildContext context, {String? initialCode}) {
     final codeController =
         TextEditingController(text: initialCode ?? '');
+    bool isJoining = false;
 
     showModalBottomSheet(
       context: context,
@@ -236,7 +253,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
       ),
       builder: (sheetContext) {
         return StatefulBuilder(
-          builder: (context, setState) {
+          builder: (context, setSheetState) {
             return SingleChildScrollView(
               child: Padding(
                 padding: EdgeInsets.only(
@@ -282,60 +299,76 @@ class _TeamsScreenState extends State<TeamsScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(
-                        onPressed: () async {
-                          final rawCode = codeController.text.trim();
+                        onPressed: isJoining
+                            ? null
+                            : () async {
+                                final rawCode = codeController.text.trim();
 
-                          if (rawCode.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Please enter a team code'),
+                                if (rawCode.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content:
+                                          Text('Please enter a team code'),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                final auth = context.read<AuthProvider>();
+                                final user = auth.user;
+
+                                if (user == null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                          'You must be logged in to join a team'),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                setSheetState(() => isJoining = true);
+                                final teamProvider =
+                                    context.read<TeamProvider>();
+                                final success = await teamProvider.joinTeam(
+                                  rawCode.toUpperCase(),
+                                  user.uid,
+                                );
+
+                                if (!context.mounted) {
+                                  setSheetState(() => isJoining = false);
+                                  return;
+                                }
+
+                                setSheetState(() => isJoining = false);
+                                if (success) {
+                                  Navigator.of(sheetContext).pop();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Joined team successfully'),
+                                    ),
+                                  );
+                                } else {
+                                  final message = teamProvider.error ??
+                                      'Could not join team. Check the code and try again.';
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(message)),
+                                  );
+                                }
+                              },
+                        child: isJoining
+                            ? const SizedBox(
+                                height: 16,
+                                width: 16,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2),
+                              )
+                            : Text(
+                                'Join team',
+                                style: GoogleFonts.inter(
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                            );
-                            return;
-                          }
-
-                          final auth = context.read<AuthProvider>();
-                          final user = auth.user;
-
-                          if (user == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content:
-                                    Text('You must be logged in to join a team'),
-                              ),
-                            );
-                            return;
-                          }
-
-                          final teamProvider = context.read<TeamProvider>();
-                          final success = await teamProvider.joinTeam(
-                            rawCode.toUpperCase(),
-                            user.uid,
-                          );
-
-                          if (!context.mounted) return;
-
-                          if (success) {
-                            Navigator.of(sheetContext).pop();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Joined team successfully'),
-                              ),
-                            );
-                          } else {
-                            final message = teamProvider.error ??
-                                'Could not join team. Check the code and try again.';
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(message)),
-                            );
-                          }
-                        },
-                        child: Text(
-                          'Join team',
-                          style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
                       ),
                     ),
                   ],

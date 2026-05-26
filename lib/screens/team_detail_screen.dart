@@ -7,7 +7,6 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../constants/app_constants.dart';
 import '../models/team.dart';
-import '../models/user.dart';
 import '../utils/app_colors.dart';
 import '../utils/date_format_utils.dart';
 import '../utils/theme_colors.dart';
@@ -22,13 +21,33 @@ import '../widgets/ad_banner.dart';
 import '../services/analytics_service.dart';
 import 'game_detail_screen.dart';
 
-class TeamDetailScreen extends StatelessWidget {
+class TeamDetailScreen extends StatefulWidget {
   final String teamId;
 
   const TeamDetailScreen({
     super.key,
     required this.teamId,
   });
+
+  @override
+  State<TeamDetailScreen> createState() => _TeamDetailScreenState();
+}
+
+class _TeamDetailScreenState extends State<TeamDetailScreen> {
+  Future<List<Game>>? _pastGamesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() {
+          _pastGamesFuture =
+              context.read<GameProvider>().fetchPastGames([widget.teamId]);
+        });
+      }
+    });
+  }
 
   Future<void> _createGamesFromSchedule(
     BuildContext context,
@@ -83,12 +102,12 @@ class TeamDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final teamProvider = context.watch<TeamProvider>();
-    final team = teamProvider.teams.firstWhere((t) => t.id == teamId);
+    final team = teamProvider.teams.firstWhere((t) => t.id == widget.teamId);
     final auth = context.watch<AuthProvider>();
     final currentUserId = auth.user?.uid;
     final isAdmin = currentUserId != null && currentUserId == team.adminId;
     final gameProvider = context.watch<GameProvider>();
-    final teamGames = gameProvider.getGamesForTeam(teamId);
+    final teamGames = gameProvider.getGamesForTeam(widget.teamId);
     final onSurfaceColor = Theme.of(context).colorScheme.onSurface;
 
     void showScheduleSheet() {
@@ -115,10 +134,11 @@ class TeamDetailScreen extends StatelessWidget {
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         builder: (sheetContext) {
+          bool isSaving = false;
           return SafeArea(
             top: false,
             child: StatefulBuilder(
-              builder: (context, setState) {
+              builder: (context, setSheetState) {
                 return SingleChildScrollView(
                   child: Padding(
                     padding: EdgeInsets.only(
@@ -182,12 +202,12 @@ class TeamDetailScreen extends StatelessWidget {
                                     initialTime: initialTime,
                                   );
                                   if (picked != null) {
-                                    setState(() {
+                                    setSheetState(() {
                                       dayTimes[dayIndex] = picked;
                                     });
                                   }
                                 } else {
-                                  setState(() {
+                                  setSheetState(() {
                                     dayTimes.remove(dayIndex);
                                   });
                                 }
@@ -199,48 +219,73 @@ class TeamDetailScreen extends StatelessWidget {
                         SizedBox(
                           width: double.infinity,
                           child: FilledButton(
-                            onPressed: () async {
-                              if (dayTimes.isEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Select at least one day of the week',
+                            onPressed: isSaving
+                                ? null
+                                : () async {
+                                    if (dayTimes.isEmpty) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Select at least one day of the week',
+                                          ),
+                                        ),
+                                      );
+                                      return;
+                                    }
+
+                                    setSheetState(() => isSaving = true);
+                                    try {
+                                      await context
+                                          .read<TeamProvider>()
+                                          .setRecurringSchedule(
+                                            teamId: team.id,
+                                            dayTimes: dayTimes,
+                                          );
+
+                                      await _createGamesFromSchedule(
+                                        context,
+                                        team,
+                                        dayTimes,
+                                      );
+
+                                      if (context.mounted) {
+                                        Navigator.of(sheetContext).pop();
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          const SnackBar(
+                                            content:
+                                                Text('Weekly games scheduled'),
+                                          ),
+                                        );
+                                      }
+                                    } catch (e) {
+                                      if (context.mounted) {
+                                        setSheetState(() => isSaving = false);
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              'Could not save schedule: $e',
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  },
+                            child: isSaving
+                                ? const SizedBox(
+                                    height: 16,
+                                    width: 16,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : Text(
+                                    'Save schedule',
+                                    style: GoogleFonts.inter(
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                                );
-                                return;
-                              }
-
-                              await context
-                                  .read<TeamProvider>()
-                                  .setRecurringSchedule(
-                                    teamId: team.id,
-                                    dayTimes: dayTimes,
-                                  );
-
-                              await _createGamesFromSchedule(
-                                context,
-                                team,
-                                dayTimes,
-                              );
-
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content:
-                                        Text('Weekly games scheduled'),
-                                  ),
-                                );
-                              }
-
-                              Navigator.of(sheetContext).pop();
-                            },
-                            child: Text(
-                              'Save schedule',
-                              style: GoogleFonts.inter(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
                           ),
                         ),
                       ],
@@ -368,7 +413,7 @@ class TeamDetailScreen extends StatelessWidget {
                       .renameTeam(
                         teamId: team.id,
                         newName: trimmed,
-                        requesterId: currentUserId!,
+                        requesterId: currentUserId,
                       );
 
                   if (!context.mounted) return;
@@ -415,7 +460,7 @@ class TeamDetailScreen extends StatelessWidget {
                       .read<TeamProvider>()
                       .deleteTeam(
                         teamId: team.id,
-                        requesterId: currentUserId!,
+                        requesterId: currentUserId,
                       );
 
                   if (!context.mounted) return;
@@ -468,7 +513,7 @@ class TeamDetailScreen extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 24,
-                    backgroundColor: colorScheme.primary.withOpacity(0.1),
+                    backgroundColor: colorScheme.primary.withValues(alpha: 0.1),
                     child: Text(
                       team.sport.emoji,
                       style: const TextStyle(fontSize: 24),
@@ -586,7 +631,7 @@ class TeamDetailScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           FutureBuilder<List<Game>>(
-            future: gameProvider.fetchPastGames([teamId]),
+            future: _pastGamesFuture,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const SizedBox.shrink();
@@ -605,9 +650,9 @@ class TeamDetailScreen extends StatelessWidget {
                 margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.04),
+                  color: Colors.green.withValues(alpha: 0.04),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.green.withOpacity(0.12)),
+                  border: Border.all(color: Colors.green.withValues(alpha: 0.12)),
                 ),
                 child: Text(
                   count == 1
@@ -634,7 +679,7 @@ class TeamDetailScreen extends StatelessWidget {
               ),
               TextButton.icon(
                 onPressed: () async {
-                  await _showCreateGameSheet(context, teamId);
+                  await _showCreateGameSheet(context, widget.teamId);
                 },
                 icon: const Icon(Icons.add),
                 label: const Text('Add game'),
@@ -740,7 +785,7 @@ class TeamDetailScreen extends StatelessWidget {
       bottomNavigationBar: const AdBanner(),
       floatingActionButton: isAdmin
           ? FloatingActionButton.extended(
-              heroTag: 'teamScheduleFab_$teamId',
+              heroTag: 'teamScheduleFab_${widget.teamId}',
               onPressed: showScheduleSheet,
               icon: const Icon(Icons.event),
               label: const Text('Schedule weekly games'),
@@ -1216,8 +1261,8 @@ class _RosterSection extends StatelessWidget {
                 if (appUser != null && appUser.name.isNotEmpty) {
                   displayName =
                       isCurrentUser ? '${appUser.name} (you)' : appUser.name;
-                } else if (isCurrentUser && currentUser?.name.isNotEmpty == true) {
-                  displayName = '${currentUser!.name} (you)';
+                } else if (isCurrentUser && currentUser.name.isNotEmpty) {
+                  displayName = '${currentUser.name} (you)';
                 } else {
                   displayName = memberId;
                 }
@@ -1226,7 +1271,7 @@ class _RosterSection extends StatelessWidget {
                   children: [
                     CircleAvatar(
                       radius: 18,
-                      backgroundColor: colorScheme.primary.withOpacity(0.08),
+                      backgroundColor: colorScheme.primary.withValues(alpha: 0.08),
                       child: Text(
                         displayName.isNotEmpty
                             ? displayName[0].toUpperCase()
@@ -1511,7 +1556,7 @@ class _GameListTile extends StatelessWidget {
         leading: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           decoration: BoxDecoration(
-            color: colorScheme.primary.withOpacity(0.08),
+            color: colorScheme.primary.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Column(
@@ -1650,15 +1695,14 @@ class _GameListTile extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 8),
-            if (currentUserId != null)
-              Wrap(
+            Wrap(
                 spacing: 8,
                 children: [
                   ChoiceChip(
                     label: Text("I'm in ($inCount)"),
                     selected: currentStatus == ConfirmationStatus.confirmed,
-                    selectedColor: AppColors.confirmed.withOpacity(0.18),
-                    backgroundColor: AppColors.confirmed.withOpacity(0.06),
+                    selectedColor: AppColors.confirmed.withValues(alpha: 0.18),
+                    backgroundColor: AppColors.confirmed.withValues(alpha: 0.06),
                     labelStyle: GoogleFonts.inter(
                       fontSize: 13,
                       fontWeight: currentStatus == ConfirmationStatus.confirmed
@@ -1700,8 +1744,8 @@ class _GameListTile extends StatelessWidget {
                   ChoiceChip(
                     label: Text('Maybe ($maybeCount)'),
                     selected: currentStatus == ConfirmationStatus.maybe,
-                    selectedColor: Colors.amber.withOpacity(0.18),
-                    backgroundColor: Colors.amber.withOpacity(0.06),
+                    selectedColor: Colors.amber.withValues(alpha: 0.18),
+                    backgroundColor: Colors.amber.withValues(alpha: 0.06),
                     labelStyle: GoogleFonts.inter(
                       fontSize: 13,
                       fontWeight: currentStatus == ConfirmationStatus.maybe
@@ -1729,8 +1773,8 @@ class _GameListTile extends StatelessWidget {
                   ChoiceChip(
                     label: Text("I'm out ($outCount)"),
                     selected: currentStatus == ConfirmationStatus.declined,
-                    selectedColor: AppColors.declined.withOpacity(0.18),
-                    backgroundColor: AppColors.declined.withOpacity(0.06),
+                    selectedColor: AppColors.declined.withValues(alpha: 0.18),
+                    backgroundColor: AppColors.declined.withValues(alpha: 0.06),
                     labelStyle: GoogleFonts.inter(
                       fontSize: 13,
                       fontWeight: currentStatus == ConfirmationStatus.declined

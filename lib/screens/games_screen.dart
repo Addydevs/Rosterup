@@ -74,7 +74,9 @@ class _GamesScreenState extends State<GamesScreen> {
 
     Game? nextGameNeedingStatus;
     if (currentUserId != null) {
+      final cutoff = DateTime.now().add(const Duration(hours: 72));
       for (final game in games) {
+        if (game.dateTime.isAfter(cutoff)) break; // games are sorted ascending
         final status = game.confirmations[currentUserId];
         if (status == null || status == ConfirmationStatus.noResponse) {
           nextGameNeedingStatus = game;
@@ -155,16 +157,25 @@ class _GamesScreenState extends State<GamesScreen> {
           if (nextGameNeedingStatus != null)
             Container(
               width: double.infinity,
-              color: Colors.blue.shade50,
+              color: Theme.of(context).colorScheme.primaryContainer,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline, size: 18),
+                  Icon(Icons.info_outline,
+                      size: 18,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onPrimaryContainer),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Set your status for your next game.',
-                      style: GoogleFonts.inter(fontSize: 13),
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onPrimaryContainer,
+                      ),
                     ),
                   ),
                   TextButton(
@@ -177,7 +188,14 @@ class _GamesScreenState extends State<GamesScreen> {
                         ),
                       );
                     },
-                    child: const Text('Review'),
+                    child: Text(
+                      'Review',
+                      style: TextStyle(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onPrimaryContainer,
+                      ),
+                    ),
                   ),
                 ],
               ),
