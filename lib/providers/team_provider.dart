@@ -176,6 +176,10 @@ class TeamProvider extends ChangeNotifier {
         } else {
           _teams.add(updatedTeam!);
         }
+        await AnalyticsService.logJoinTeam(
+          teamId: updatedTeam!.id,
+          sport: updatedTeam!.sport.name,
+        );
       }
 
       return true;
@@ -289,12 +293,16 @@ class TeamProvider extends ChangeNotifier {
   Future<bool> leaveTeam({
     required String teamId,
     required String userId,
-  }) {
-    return removeMember(
+  }) async {
+    final success = await removeMember(
       teamId: teamId,
       memberId: userId,
       requesterId: userId,
     );
+    if (success) {
+      await AnalyticsService.logLeaveTeam(teamId: teamId);
+    }
+    return success;
   }
 
   Future<bool> removeMember({

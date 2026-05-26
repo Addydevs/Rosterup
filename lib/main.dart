@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'firebase_options.dart';
+import 'services/analytics_service.dart';
 import 'services/deep_link_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/team_provider.dart';
@@ -144,6 +145,7 @@ class RosterUpApp extends StatelessWidget {
             ),
             themeMode: themeMode,
             home: SplashScreen(initialTeamCode: initialTeamCode),
+            navigatorObservers: [AnalyticsService.observer],
           );
         },
       ),

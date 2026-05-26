@@ -3,6 +3,17 @@ import 'package:firebase_analytics/firebase_analytics.dart';
 class AnalyticsService {
   static final FirebaseAnalytics _analytics = FirebaseAnalytics.instance;
 
+  /// Navigator observer — add to MaterialApp.navigatorObservers for
+  /// automatic screen_view events.
+  static final FirebaseAnalyticsObserver observer =
+      FirebaseAnalyticsObserver(analytics: _analytics);
+
+  // ── Identity ────────────────────────────────────────────────────────────
+
+  static Future<void> setUserId(String? uid) {
+    return _analytics.setUserId(id: uid);
+  }
+
   static Future<void> logLogin({String method = 'email'}) {
     return _analytics.logLogin(loginMethod: method);
   }
@@ -117,6 +128,63 @@ class AnalyticsService {
         'game_id': gameId,
         'team_id': teamId,
         'has_guest': hasGuest,
+      },
+    );
+  }
+
+  // ── Team ────────────────────────────────────────────────────────────────
+
+  static Future<void> logJoinTeam({
+    required String teamId,
+    required String sport,
+  }) {
+    return _analytics.logEvent(
+      name: 'join_team',
+      parameters: {
+        'team_id': teamId,
+        'sport': sport,
+      },
+    );
+  }
+
+  static Future<void> logLeaveTeam({required String teamId}) {
+    return _analytics.logEvent(
+      name: 'leave_team',
+      parameters: {'team_id': teamId},
+    );
+  }
+
+  static Future<void> logViewTeam({required String teamId}) {
+    return _analytics.logEvent(
+      name: 'view_team',
+      parameters: {'team_id': teamId},
+    );
+  }
+
+  // ── Game ─────────────────────────────────────────────────────────────────
+
+  static Future<void> logViewGame({
+    required String gameId,
+    required String teamId,
+  }) {
+    return _analytics.logEvent(
+      name: 'view_game',
+      parameters: {
+        'game_id': gameId,
+        'team_id': teamId,
+      },
+    );
+  }
+
+  static Future<void> logEditGame({
+    required String gameId,
+    required String teamId,
+  }) {
+    return _analytics.logEvent(
+      name: 'edit_game',
+      parameters: {
+        'game_id': gameId,
+        'team_id': teamId,
       },
     );
   }

@@ -31,6 +31,23 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
   String? _streakGameId;
   Future<String?>? _streakFuture;
 
+  @override
+  void initState() {
+    super.initState();
+    // Log the view event once, before we know the teamId.
+    // We'll piggy-back on the gameId; teamId is resolved in build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final game = context.read<GameProvider>().getGameById(widget.gameId);
+      if (game != null) {
+        AnalyticsService.logViewGame(
+          gameId: game.id,
+          teamId: game.teamId,
+        );
+      }
+    });
+  }
+
   String _displayName(String userId) {
     final userProvider = context.read<UserProvider>();
     final user = userProvider.getUserById(userId);
@@ -214,6 +231,10 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
                                         locationController.text.trim(),
                                   );
                               if (!context.mounted) return;
+                              AnalyticsService.logEditGame(
+                                gameId: game.id,
+                                teamId: game.teamId,
+                              );
                               Navigator.of(sheetContext).pop();
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(

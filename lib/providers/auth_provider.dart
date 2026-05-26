@@ -36,6 +36,7 @@ class AuthProvider extends ChangeNotifier {
       
       await _auth.signInWithEmailAndPassword(email: email, password: password);
       await AnalyticsService.logLogin(method: 'email');
+      await AnalyticsService.setUserId(_auth.currentUser?.uid);
       return true;
     } on FirebaseAuthException catch (e) {
       debugPrint('Sign in error: ${e.message}');
@@ -65,6 +66,7 @@ class AuthProvider extends ChangeNotifier {
       
       await _auth.createUserWithEmailAndPassword(email: email, password: password);
       await AnalyticsService.logSignUp(method: 'email');
+      await AnalyticsService.setUserId(_auth.currentUser?.uid);
       return true;
     } on FirebaseAuthException catch (e) {
       debugPrint('Sign up error: ${e.message}');
@@ -100,6 +102,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    await AnalyticsService.setUserId(null);
     await _auth.signOut();
   }
 
