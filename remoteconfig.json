@@ -1,0 +1,21 @@
+{
+  "parameters": {
+    "latest_build": {
+      "defaultValue": { "value": "13" },
+      "description": "The latest available build number. App prompts an optional update when current build < this value.",
+      "valueType": "NUMBER"
+    },
+    "min_supported_build": {
+      "defaultValue": { "value": "1" },
+      "description": "Minimum supported build number. App forces an update when current build < this value. Set to 0 to disable forced updates.",
+      "valueType": "NUMBER"
+    },
+    "store_url": {
+      "defaultValue": { "value": "https://play.google.com/store/apps/details?id=com.addydevs.rosterupV2" },
+      "description": "Play Store / App Store URL opened when the user taps the update button.",
+      "valueType": "STRING"
+    }
+  },
+  "parameterGroups": {},
+  "conditions": []
+}
