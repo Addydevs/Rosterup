@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
-import '../services/deep_link_service.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
 import 'profile_setup_screen.dart';

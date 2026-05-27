@@ -147,6 +147,30 @@ class ChatProvider extends ChangeNotifier {
     await AnalyticsService.logChatMessage(teamId: teamId);
   }
 
+  Future<void> sendBroadcast({
+    required String teamId,
+    required String senderId,
+    required String senderName,
+    required String text,
+  }) async {
+    if (text.trim().isEmpty) return;
+
+    await _firestore
+        .collection('teams')
+        .doc(teamId)
+        .collection('messages')
+        .add({
+      'teamId': teamId,
+      'senderId': senderId,
+      'senderName': senderName,
+      'text': text.trim(),
+      'isBroadcast': true,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    await AnalyticsService.logChatMessage(teamId: teamId);
+  }
+
   Future<bool> deleteMessage({
     required String teamId,
     required String messageId,

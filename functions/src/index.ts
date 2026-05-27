@@ -314,6 +314,7 @@ exports.onTeamChatMessage = functions.firestore
     const team = teamSnap.data() || {};
     const memberIds = (team.memberIds as string[]) || [];
     const senderId = message.senderId as string | undefined;
+    const isBroadcast = message.isBroadcast === true;
     const recipientIds = memberIds.filter((id) => id !== senderId);
     const tokens = await getUserTokensWithPreference(
       recipientIds,
@@ -324,11 +325,13 @@ exports.onTeamChatMessage = functions.firestore
     const payload: admin.messaging.MulticastMessage = {
       tokens,
       notification: {
-        title: `New message in ${team.name || "team chat"}`,
+        title: isBroadcast
+          ? `📢 Announcement from ${team.name || "your team"}`
+          : `New message in ${team.name || "team chat"}`,
         body: message.text as string,
       },
       data: {
-        type: "chat_message",
+        type: isBroadcast ? "broadcast_message" : "chat_message",
         teamId,
       },
     };

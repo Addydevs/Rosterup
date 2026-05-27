@@ -76,6 +76,20 @@ class _TeamChatScreenState extends State<TeamChatScreen> {
         foregroundColor: onSurfaceColor,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
+        actions: [
+          if (isAdmin)
+            IconButton(
+              icon: const Icon(Icons.campaign_outlined),
+              tooltip: 'Broadcast to all members',
+              onPressed: () => _showBroadcastDialog(
+                context,
+                team,
+                chatProvider,
+                currentUserId,
+                currentUserName,
+              ),
+            ),
+        ],
       ),
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
@@ -109,6 +123,68 @@ class _TeamChatScreenState extends State<TeamChatScreen> {
                       itemBuilder: (context, index) {
                         final message = messages[index];
                         final isMine = message.senderId == currentUserId;
+
+                        if (message.isBroadcast) {
+                          return GestureDetector(
+                            onLongPress: isAdmin
+                                ? () => _showMessageActions(
+                                      context,
+                                      message,
+                                      isMine: isMine,
+                                      isAdmin: isAdmin,
+                                    )
+                                : null,
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(vertical: 6),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.withValues(alpha: 0.15),
+                                border: Border.all(
+                                  color: Colors.amber,
+                                  width: 1,
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(
+                                    Icons.campaign,
+                                    color: Colors.amber,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${message.senderName} · Announcement',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.amber[800],
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          message.text,
+                                          style: GoogleFonts.inter(
+                                            fontSize: 14,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurface,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
 
                         return GestureDetector(
                           onLongPress: () => _showMessageActions(
@@ -233,6 +309,71 @@ class _TeamChatScreenState extends State<TeamChatScreen> {
     );
   }
 
+  void _showBroadcastDialog(
+    BuildContext context,
+    dynamic team,
+    ChatProvider chatProvider,
+    String? currentUserId,
+    String currentUserName,
+  ) {
+    final controller = TextEditingController();
+    bool isSending = false;
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.campaign, color: Colors.amber),
+                SizedBox(width: 8),
+                Text('Broadcast'),
+              ],
+            ),
+            content: TextField(
+              controller: controller,
+              maxLines: 4,
+              maxLength: 500,
+              decoration: const InputDecoration(
+                hintText: 'Type your announcement...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: isSending
+                    ? null
+                    : () async {
+                        if (controller.text.trim().isEmpty) return;
+                        setDialogState(() => isSending = true);
+                        await chatProvider.sendBroadcast(
+                          teamId: team.id as String,
+                          senderId: currentUserId ?? '',
+                          senderName: currentUserName,
+                          text: controller.text.trim(),
+                        );
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      },
+                child: isSending
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Send to all'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _showMessageActions(
     BuildContext context,
     ChatMessage message, {
@@ -263,6 +404,7 @@ class _TeamChatScreenState extends State<TeamChatScreen> {
 
     await showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),

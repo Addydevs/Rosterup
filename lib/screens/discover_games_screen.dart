@@ -97,6 +97,7 @@ class _DiscoverGamesScreenState extends State<DiscoverGamesScreen> {
 
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),

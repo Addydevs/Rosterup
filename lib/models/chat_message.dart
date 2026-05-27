@@ -7,6 +7,7 @@ class ChatMessage {
   final String senderName;
   final String text;
   final DateTime createdAt;
+  final bool isBroadcast;
 
   ChatMessage({
     required this.id,
@@ -15,6 +16,7 @@ class ChatMessage {
     required this.senderName,
     required this.text,
     required this.createdAt,
+    this.isBroadcast = false,
   });
 
   factory ChatMessage.fromFirestore(DocumentSnapshot doc) {
@@ -27,6 +29,7 @@ class ChatMessage {
       text: data['text'] ?? '',
       createdAt:
           (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      isBroadcast: (data['isBroadcast'] as bool?) ?? false,
     );
   }
 }

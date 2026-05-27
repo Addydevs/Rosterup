@@ -118,6 +118,7 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
 
     await showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -938,6 +939,7 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
   Future<String?> _showOutReasonSheet(BuildContext context) async {
     return showModalBottomSheet<String>(
       context: context,
+      useSafeArea: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),

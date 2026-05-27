@@ -89,14 +89,19 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<bool> sendPasswordResetEmail(String email) async {
+    _lastError = null;
     try {
       await _auth.sendPasswordResetEmail(email: email);
       return true;
     } on FirebaseAuthException catch (e) {
-      debugPrint('Password reset error: ${e.message}');
+      debugPrint('Password reset error: ${e.code} – ${e.message}');
+      _lastError = _friendlyAuthError(e.code);
+      notifyListeners();
       return false;
     } catch (e) {
       debugPrint('Password reset error (unexpected): $e');
+      _lastError = 'An unexpected error occurred. Please try again.';
+      notifyListeners();
       return false;
     }
   }

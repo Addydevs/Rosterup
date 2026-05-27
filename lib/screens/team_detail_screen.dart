@@ -130,6 +130,7 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
 
       showModalBottomSheet(
         context: context,
+        useSafeArea: true,
         isScrollControlled: true,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -829,6 +830,7 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
 
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: false,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -910,6 +912,7 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
 
     await showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -1862,6 +1865,7 @@ class _GameListTile extends StatelessWidget {
 
     await showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),

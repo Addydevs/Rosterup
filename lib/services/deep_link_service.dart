@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
-import 'package:flutter/material.dart';
 
 /// Handles incoming deep links of the form:
 ///   rosterup://join-team?code=WMH8KQ
