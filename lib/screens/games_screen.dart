@@ -24,7 +24,9 @@ enum GamesFilter {
 }
 
 class GamesScreen extends StatefulWidget {
-  const GamesScreen({super.key});
+  final VoidCallback? onGoToTeams;
+
+  const GamesScreen({super.key, this.onGoToTeams});
 
   @override
   State<GamesScreen> createState() => _GamesScreenState();
@@ -70,7 +72,7 @@ class _GamesScreenState extends State<GamesScreen> {
 
     final auth = context.watch<AuthProvider>();
     final currentUserId = auth.user?.uid;
-    final onSurfaceColor = Theme.of(context).colorScheme.onSurface;
+    final onSurfaceColor = Theme.of(context).colorScheme.onSurfaceVariant;
 
     Game? nextGameNeedingStatus;
     if (currentUserId != null) {
@@ -261,14 +263,17 @@ class _GamesScreenState extends State<GamesScreen> {
               child: isLoading && games.isEmpty
                   ? const Center(child: CircularProgressIndicator())
                   : games.isEmpty
-                      ? const Center(
+                      ? Center(
                           child: Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 32),
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 32),
                             child: EmptyState(
                               icon: Icons.sports_soccer,
                               title: 'No games scheduled',
                               message:
                                   'Create or join a team to start organizing pickup games.',
+                              primaryActionLabel: 'Go to Teams',
+                              onPrimaryAction: widget.onGoToTeams,
                             ),
                           ),
                         )
@@ -522,7 +527,7 @@ class _GamesScreenState extends State<GamesScreen> {
                                                             buffer.writeln('Game access code: $accessCode');
                                                           }
                                                           buffer..writeln()..writeln('Download RosterUp: ${AppConstants.downloadUrl}');
-                                                          Share.share(buffer.toString(), subject: 'Join our game on RosterUp');
+                                                          SharePlus.instance.share(ShareParams(text: buffer.toString(), subject: 'Join our game on RosterUp'));
                                                         },
                                                         child: Row(
                                                           mainAxisSize: MainAxisSize.min,

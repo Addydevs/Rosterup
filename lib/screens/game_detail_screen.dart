@@ -28,6 +28,7 @@ class GameDetailScreen extends StatefulWidget {
 
 class _GameDetailScreenState extends State<GameDetailScreen> {
   bool _isSubmitting = false;
+  bool _isFetching = false;
   String? _streakGameId;
   Future<String?>? _streakFuture;
 
@@ -38,14 +39,36 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
     // We'll piggy-back on the gameId; teamId is resolved in build.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final game = context.read<GameProvider>().getGameById(widget.gameId);
+      final gameProvider = context.read<GameProvider>();
+      final game = gameProvider.getGameById(widget.gameId);
       if (game != null) {
         AnalyticsService.logViewGame(
           gameId: game.id,
           teamId: game.teamId,
         );
+      } else {
+        // Opened via a notification tap or deep link before the games list
+        // loaded — fetch this single game so we can show it.
+        _fetchMissingGame(gameProvider);
       }
     });
+  }
+
+  Future<void> _fetchMissingGame(GameProvider gameProvider) async {
+    setState(() => _isFetching = true);
+    final game = await gameProvider.fetchGameById(widget.gameId);
+    if (!mounted) return;
+    setState(() => _isFetching = false);
+    if (game != null) {
+      // Make sure this game's team is loaded so we can show its name/code.
+      final teamProvider = context.read<TeamProvider>();
+      if (teamProvider.teams.every((t) => t.id != game.teamId)) {
+        final auth = context.read<AuthProvider>();
+        final uid = auth.user?.uid;
+        if (uid != null) await teamProvider.loadUserTeams(uid);
+      }
+      AnalyticsService.logViewGame(gameId: game.id, teamId: game.teamId);
+    }
   }
 
   String _displayName(String userId) {
@@ -59,6 +82,40 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
       return user.name;
     }
     return userId;
+  }
+
+  /// Opens a pre-filled Google Calendar event so the user can save the game
+  /// to whatever calendar they use. Works cross-platform via the browser.
+  Future<void> _addToCalendar(Game game, String teamName) async {
+    String fmt(DateTime dt) {
+      final u = dt.toUtc();
+      String two(int n) => n.toString().padLeft(2, '0');
+      return '${u.year}${two(u.month)}${two(u.day)}T'
+          '${two(u.hour)}${two(u.minute)}${two(u.second)}Z';
+    }
+
+    final start = game.dateTime;
+    final end = start.add(const Duration(hours: 1));
+    final title = '$teamName game';
+    final details = game.notes?.trim().isNotEmpty == true
+        ? game.notes!.trim()
+        : 'Pickup game organized in RosterUp.';
+
+    final uri = Uri.https('calendar.google.com', '/calendar/render', {
+      'action': 'TEMPLATE',
+      'text': title,
+      'dates': '${fmt(start)}/${fmt(end)}',
+      'location': game.location,
+      'details': details,
+    });
+
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open your calendar.')),
+      );
+    }
   }
 
   Future<String?> _loadStreakLabel(
@@ -285,8 +342,10 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
         appBar: AppBar(
           title: const Text('Game details'),
         ),
-        body: const Center(
-          child: Text('Game not found'),
+        body: Center(
+          child: _isFetching
+              ? const CircularProgressIndicator()
+              : const Text('Game not found'),
         ),
       );
     }
@@ -409,6 +468,11 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
               onPressed: () => _showEditGameSheet(context, game),
             ),
           IconButton(
+            icon: const Icon(Icons.event_available_outlined),
+            tooltip: 'Add to calendar',
+            onPressed: () => _addToCalendar(game, teamName),
+          ),
+          IconButton(
             icon: const Icon(Icons.ios_share),
             tooltip: 'Share game',
             onPressed: () {
@@ -418,9 +482,11 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
                 isPublic: game.isPublic,
                 hasAccessCode: hasAccessCode,
               );
-              Share.share(
-                shareMessage,
-                subject: 'Join our game on RosterUp',
+              SharePlus.instance.share(
+                ShareParams(
+                  text: shareMessage,
+                  subject: 'Join our game on RosterUp',
+                ),
               );
             },
           ),
@@ -578,10 +644,12 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
                                     isPublic: game.isPublic,
                                     hasAccessCode: hasAccessCode,
                                   );
-                                  Share.share(
-                                    shareMessage,
-                                    subject:
-                                        'Join our game on RosterUp',
+                                  SharePlus.instance.share(
+                                    ShareParams(
+                                      text: shareMessage,
+                                      subject:
+                                          'Join our game on RosterUp',
+                                    ),
                                   );
                                 },
                               ),
@@ -836,9 +904,11 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
                       const SizedBox(width: 8),
                       TextButton.icon(
                         onPressed: () {
-                          Share.share(
-                            shareMessage,
-                            subject: 'Join our game on RosterUp',
+                          SharePlus.instance.share(
+                            ShareParams(
+                              text: shareMessage,
+                              subject: 'Join our game on RosterUp',
+                            ),
                           );
                         },
                         icon: const Icon(Icons.person_add, size: 14),

@@ -6,6 +6,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'firebase_options.dart';
 import 'services/analytics_service.dart';
 import 'services/deep_link_service.dart';
+import 'utils/app_navigator.dart';
 import 'providers/auth_provider.dart';
 import 'providers/team_provider.dart';
 import 'providers/game_provider.dart';
@@ -126,6 +127,8 @@ class RosterUpApp extends StatelessWidget {
 
           return MaterialApp(
             debugShowCheckedModeBanner: false,
+            navigatorKey: AppNavigator.navigatorKey,
+            scaffoldMessengerKey: AppNavigator.messengerKey,
             title: 'RosterUp',
             theme: ThemeData(
               useMaterial3: true,

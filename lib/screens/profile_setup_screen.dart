@@ -83,7 +83,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final onSurfaceColor = Theme.of(context).colorScheme.onSurface;
+    final onSurfaceColor = Theme.of(context).colorScheme.onSurfaceVariant;
     return Scaffold(
       appBar: AppBar(
         title: Text(

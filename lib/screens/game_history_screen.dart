@@ -46,7 +46,7 @@ class _GameHistoryScreenState extends State<GameHistoryScreen> {
   Widget build(BuildContext context) {
     final teamProvider = context.watch<TeamProvider>();
     final teamIds = teamProvider.teams.map((t) => t.id).toList();
-    final onSurfaceColor = Theme.of(context).colorScheme.onSurface;
+    final onSurfaceColor = Theme.of(context).colorScheme.onSurfaceVariant;
 
     // Load (or re-load when team membership changes) lazily.
     if (_future == null || teamIds.join(',') != _lastTeamIds.join(',')) {

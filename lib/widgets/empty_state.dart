@@ -27,7 +27,7 @@ class EmptyState extends StatelessWidget {
         Icon(
           icon,
           size: 64,
-          color: colorScheme.primary.withOpacity(0.3),
+          color: colorScheme.primary.withValues(alpha: 0.3),
         ),
         const SizedBox(height: 16),
         Text(
@@ -44,7 +44,7 @@ class EmptyState extends StatelessWidget {
           textAlign: TextAlign.center,
           style: GoogleFonts.inter(
             fontSize: 14,
-            color: colorScheme.onSurface,
+            color: colorScheme.onSurfaceVariant,
           ),
         ),
         if (primaryActionLabel != null && onPrimaryAction != null) ...[

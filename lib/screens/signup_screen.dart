@@ -91,7 +91,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 Text(
                   'It only takes a few seconds.',
                   style: GoogleFonts.inter(
-                    color: Theme.of(context).colorScheme.onSurface,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(height: 24),

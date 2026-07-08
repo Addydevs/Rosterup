@@ -106,7 +106,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   @override
   Widget build(BuildContext context) {
     final current = context.watch<UserProvider>().currentUser;
-    final onSurfaceColor = Theme.of(context).colorScheme.onSurface;
+    final onSurfaceColor = Theme.of(context).colorScheme.onSurfaceVariant;
 
     return Scaffold(
       appBar: AppBar(

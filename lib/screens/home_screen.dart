@@ -41,7 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _currentIndex = widget.initialTabIndex;
     _screens = [
-      const GamesScreen(),
+      GamesScreen(onGoToTeams: () => _goToTab(1)),
       TeamsScreen(initialJoinCode: widget.initialJoinTeamCode),
       const ChatScreen(),
     ];
@@ -54,6 +54,11 @@ class _HomeScreenState extends State<HomeScreen> {
         _screens[1] = TeamsScreen(initialJoinCode: code);
       });
     };
+  }
+
+  void _goToTab(int index) {
+    if (!mounted) return;
+    setState(() => _currentIndex = index);
   }
 
   @override

@@ -607,9 +607,11 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
                                   'Download RosterUp: ${AppConstants.downloadUrl}\n'
                                   'Then go to Teams → Join by code and enter ${team.teamCode}.';
                               AnalyticsService.logTeamShare(teamId: team.id);
-                              Share.share(
-                                message,
-                                subject: 'Join my team on RosterUp',
+                              SharePlus.instance.share(
+                                ShareParams(
+                                  text: message,
+                                  subject: 'Join my team on RosterUp',
+                                ),
                               );
                             },
                           ),

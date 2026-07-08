@@ -266,12 +266,18 @@ exports.onGameConfirmationChanged = functions.firestore
     const before = change.before.data() || {};
     const after = change.after.data() || {};
 
-    const beforeConf = before.confirmations || {};
-    const afterConf = after.confirmations || {};
+    const beforeConf = (before.confirmations || {}) as Record<string, string>;
+    const afterConf = (after.confirmations || {}) as Record<string, string>;
 
     if (JSON.stringify(beforeConf) === JSON.stringify(afterConf)) {
       return;
     }
+
+    // Find the single member whose status actually changed so we can name them.
+    const changedUserId = Object.keys(afterConf).find(
+      (uid) => afterConf[uid] !== beforeConf[uid]
+    );
+    if (!changedUserId) return;
 
     const teamId = after.teamId as string;
     const teamSnap = await db.collection("teams").doc(teamId).get();
@@ -279,17 +285,49 @@ exports.onGameConfirmationChanged = functions.firestore
 
     const team = teamSnap.data() || {};
     const adminId = team.adminId as string;
+
+    // Don't ping the admin about their own status change.
+    if (changedUserId === adminId) return;
+
     const tokens = await getUserTokensWithPreference(
       [adminId],
       "notificationsTeamAnnouncements"
     );
     if (tokens.length === 0) return;
 
+    // Resolve the player's display name.
+    let playerName = "A player";
+    const playerSnap = await db.collection("users").doc(changedUserId).get();
+    if (playerSnap.exists) {
+      const name = (playerSnap.data() || {}).name as string | undefined;
+      if (name && name.trim().length > 0) playerName = name.trim();
+    }
+
+    // Human-readable status + game date.
+    const statusLabels: Record<string, string> = {
+      confirmed: "is in",
+      declined: "is out",
+      maybe: "is a maybe",
+      noResponse: "cleared their status",
+    };
+    const newStatus = afterConf[changedUserId];
+    const statusText = statusLabels[newStatus] || "updated their status";
+
+    let whenText = "an upcoming game";
+    const dateTime = after.dateTime as admin.firestore.Timestamp | undefined;
+    if (dateTime && typeof dateTime.toDate === "function") {
+      whenText = `the game on ${dateTime.toDate().toLocaleDateString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      })}`;
+    }
+
     const payload: admin.messaging.MulticastMessage = {
       tokens,
       notification: {
-        title: "Game attendance updated",
-        body: `Someone changed their status for an upcoming game.`,
+        title: `${team.name || "Your team"}: attendance update`,
+        body: `${playerName} ${statusText} for ${whenText}.`,
       },
       data: {
         type: "confirmation_changed",

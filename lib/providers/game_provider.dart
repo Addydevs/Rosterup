@@ -426,6 +426,33 @@ class GameProvider extends ChangeNotifier {
     }
   }
 
+  /// Fetches a single game from Firestore and caches it locally. Used when
+  /// opening a game that isn't in the current list yet (e.g. arriving from a
+  /// push-notification tap or deep link on a cold start).
+  Future<Game?> fetchGameById(String gameId) async {
+    final cached = getGameById(gameId);
+    if (cached != null) return cached;
+
+    try {
+      final doc = await _firestore.collection('games').doc(gameId).get();
+      if (!doc.exists) return null;
+
+      final game = Game.fromFirestore(doc);
+      final index = _games.indexWhere((g) => g.id == game.id);
+      if (index == -1) {
+        _games.add(game);
+        _games.sort((a, b) => a.dateTime.compareTo(b.dateTime));
+      } else {
+        _games[index] = game;
+      }
+      notifyListeners();
+      return game;
+    } catch (e) {
+      _error = e.toString();
+      return null;
+    }
+  }
+
   int getConfirmedCount(String gameId, ConfirmationStatus status) {
     final game = getGameById(gameId);
     if (game == null) return 0;

@@ -138,7 +138,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Text(
                   'Create teams, schedule games, and keep everyone in sync.',
                   style: GoogleFonts.inter(
-                    color: Theme.of(context).colorScheme.onSurface,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(height: 24),

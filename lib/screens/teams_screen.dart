@@ -386,7 +386,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final onSurfaceColor = colorScheme.onSurface;
+    final onSurfaceColor = colorScheme.onSurfaceVariant;
     final teamProvider = context.watch<TeamProvider>();
     final isLoading = teamProvider.isLoading;
 
@@ -614,10 +614,12 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                       AnalyticsService.logTeamShare(
                                         teamId: team.id,
                                       );
-                                      Share.share(
-                                        message,
-                                        subject:
-                                            'Join my team on RosterUp',
+                                      SharePlus.instance.share(
+                                        ShareParams(
+                                          text: message,
+                                          subject:
+                                              'Join my team on RosterUp',
+                                        ),
                                       );
                                     },
                                     borderRadius: BorderRadius.circular(16),

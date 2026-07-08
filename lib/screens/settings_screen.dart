@@ -11,6 +11,7 @@ import '../services/update_service.dart';
 import '../widgets/ad_banner.dart';
 import 'login_screen.dart';
 import 'profile_edit_screen.dart';
+import 'player_stats_screen.dart';
 import 'faq_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -41,7 +42,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (theme != 'light' && theme != 'dark' && theme != 'system') {
       theme = 'light';
     }
-    final onSurfaceColor = Theme.of(context).colorScheme.onSurface;
+    final onSurfaceColor = Theme.of(context).colorScheme.onSurfaceVariant;
     final bottomSafePadding =
         MediaQuery.of(context).padding.bottom + 16.0;
 
@@ -83,6 +84,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => const ProfileEditScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.emoji_events_outlined),
+              title: Text(
+                'Your stats',
+                style: GoogleFonts.inter(),
+              ),
+              subtitle: Text(
+                'Streak, attendance, and games played',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const PlayerStatsScreen(),
                   ),
                 );
               },
@@ -259,7 +284,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onPressed: () {
                 final message =
                     'Check out RosterUp – coordinate pickup games with your team.\n\nDownload: ${AppConstants.downloadUrl}';
-                Share.share(message, subject: 'Try RosterUp');
+                SharePlus.instance.share(
+                  ShareParams(text: message, subject: 'Try RosterUp'),
+                );
               },
               icon: const Icon(Icons.ios_share),
               label: Text(
