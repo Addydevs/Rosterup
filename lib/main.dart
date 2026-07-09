@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'firebase_options.dart';
 import 'services/analytics_service.dart';
@@ -46,12 +45,8 @@ Future<void> main() async {
     debugPrint(st.toString());
   }
 
-  try {
-    await MobileAds.instance.initialize();
-    debugPrint('✅ Mobile Ads initialized successfully');
-  } catch (e) {
-    debugPrint('❌ Mobile Ads initialization error: $e');
-  }
+  // Note: the Mobile Ads SDK is initialized lazily by AdBanner, and only
+  // when the `ads_enabled` Remote Config flag is on (off by default).
 
   // Initialize deep link handling (cold-start link).
   String? initialTeamCode;

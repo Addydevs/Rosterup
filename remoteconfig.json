@@ -14,6 +14,11 @@
       "defaultValue": { "value": "https://play.google.com/store/apps/details?id=com.addydevs.rosterupV2" },
       "description": "Play Store / App Store URL opened when the user taps the update button.",
       "valueType": "STRING"
+    },
+    "ads_enabled": {
+      "defaultValue": { "value": "false" },
+      "description": "Show banner ads in the app. Flip to true to enable ads without an app release.",
+      "valueType": "BOOLEAN"
     }
   },
   "parameterGroups": {},
